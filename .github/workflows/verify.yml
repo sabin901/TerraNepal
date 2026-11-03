@@ -1,0 +1,18 @@
+name: Verify private research service
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.13'}
+      - run: pip install -r requirements.txt pip-audit==2.10.1
+      - run: python -m unittest discover -s disaster_lab -p 'test_*.py' -v
+      - run: python -m unittest discover -s disaster_archive -p 'test_*.py' -v
+      - run: pip-audit -r requirements.txt
+      - run: NEPAL_DOMAIN=research.example.org docker compose config --quiet
+      - run: docker build -t nepal-disaster-lab:ci .
+      - run: LAB_IMAGE=nepal-disaster-lab:ci python disaster_lab/docker_smoke.py

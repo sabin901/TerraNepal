@@ -1,0 +1,60 @@
+name: Publish TerraNepal research dashboard
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+permissions:
+  contents: read
+concurrency:
+  group: terranepal-pages-${{ github.event_name == 'pull_request' && github.ref || 'production' }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check public schema and failure behavior
+        run: |
+          python -m unittest discover -s public_site -p 'test_*.py' -v
+          node public_site/test_logic.cjs
+      - name: Refresh public sources
+        if: github.event_name != 'pull_request'
+        run: python public_site/pipeline.py refresh --output runtime/public-snapshot.json
+      - name: Build reviewed public files only
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = 'pull_request' ]; then
+            python public_site/pipeline.py build --output runtime/site
+          else
+            python public_site/pipeline.py build --snapshot runtime/public-snapshot.json --output runtime/site
+          fi
+      - uses: actions/upload-pages-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          path: runtime/site
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - name: Deploy public research dashboard
+        id: deployment
+        uses: actions/deploy-pages@v4

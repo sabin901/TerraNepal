@@ -1,0 +1,17 @@
+**
+!requirements.txt
+!disaster_lab
+!disaster_archive
+!planning
+disaster_lab/**
+disaster_archive/**
+planning/**
+!disaster_lab/*.py
+!disaster_lab/*.md
+!disaster_lab/static
+!disaster_lab/static/**
+!disaster_archive/archive.py
+!disaster_archive/config.json
+!disaster_archive/schema.sql
+!planning/hazard-data-and-scientific-method.md
+!source-ledger.json

@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+.env
+runtime/
+disaster_lab/local/
+disaster_archive/data/
+disaster_archive/backups/
+disaster_archive/logs/
+disaster_archive/.collector.lock
+*.log
+
+# Local audit reports and browser captures are not public site assets.
+disaster_lab/reports/

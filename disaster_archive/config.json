@@ -1,0 +1,16 @@
+{
+  "scope": "Nepal all hazards; USGS regional earthquake context kept separate",
+  "bipad_base": "https://bipadportal.gov.np/api/v1/",
+  "page_size": 1000,
+  "max_pages_per_collection": 250,
+  "request_pause_seconds": 0.2,
+  "hydro_overlap_days": 2,
+  "hydro_max_catchup_days": 7,
+  "incident_overlap_days": 90,
+  "incident_revision_pages": 3,
+  "full_refresh_days": 7,
+  "usgs_start": "1971-01-01T00:00:00+00:00",
+  "usgs_bounds": {"minlatitude": 26, "maxlatitude": 31, "minlongitude": 80, "maxlongitude": 89},
+  "desinventar_profile": "https://www.desinventar.net/DesInventar/profiletab.jsp?countrycode=npl&lang=EN",
+  "reliefweb_appname_env": "RELIEFWEB_APPNAME"
+}

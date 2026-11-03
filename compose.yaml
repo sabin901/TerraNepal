@@ -1,0 +1,58 @@
+name: nepal-disaster-lab
+x-common: &common
+  image: nepal-disaster-lab:${RELEASE_TAG:-local}
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:size=256m,mode=1777
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  volumes:
+    - ${NEPAL_DATA_DIR:-./runtime}:/data
+  environment:
+    NEPAL_PUBLIC_ORIGIN: https://${NEPAL_DOMAIN:?Set NEPAL_DOMAIN in .env}
+    NEPAL_ARCHIVE_ROOT: /data/archive
+    NEPAL_STATE_ROOT: /data/state
+  logging:
+    driver: json-file
+    options: {max-size: 10m, max-file: "3"}
+services:
+  web:
+    <<: *common
+    build: .
+    healthcheck:
+      test: [CMD, python, -c, "import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:8765/health/live',headers={'Host':os.environ['NEPAL_PUBLIC_ORIGIN'][8:]}); urllib.request.urlopen(r,timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    mem_limit: 2g
+    pids_limit: 128
+  worker:
+    <<: *common
+    command: [python, disaster_lab/worker.py]
+    healthcheck:
+      test: [CMD, python, disaster_lab/worker.py, --health]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    mem_limit: 3g
+    pids_limit: 128
+    stop_grace_period: 30s
+  proxy:
+    image: ${CADDY_IMAGE:-caddy:2-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f}
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      NEPAL_DOMAIN: ${NEPAL_DOMAIN:?Set NEPAL_DOMAIN in .env}
+    depends_on: [web]
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+volumes:
+  caddy_data:
+  caddy_config:
