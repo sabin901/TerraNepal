@@ -43,7 +43,7 @@ class PublicSnapshotTests(unittest.TestCase):
             self.assertEqual(files,set(p.ASSETS)|{'data/snapshot.json','.nojekyll'})
             with self.assertRaises(ValueError):p.build(p.SEED,d)
     def test_download_failure_falls_back_to_dated_seed(self):
-        with patch.object(p.urllib.request,'urlopen',side_effect=OSError('offline')):
+        with patch.object(p.subprocess,'run',side_effect=OSError('offline')):
             self.assertEqual(p.previous_snapshot()['built_at'],self.seed['built_at'])
     def test_duplicate_station_rejected(self):
         s=copy.deepcopy(self.seed);s['rivers'].append(s['rivers'][0])

@@ -10,6 +10,7 @@ import math
 from pathlib import Path
 import shutil
 import sqlite3
+import subprocess
 import sys
 import time
 import urllib.request
@@ -25,6 +26,7 @@ SEED = Path(__file__).with_name('snapshot.json')
 PUBLIC_URL = 'https://sabin901.github.io/TerraNepal/data/snapshot.json'
 ASSETS = ('index.html', 'app.js', 'style.css', 'logic.js', 'favicon.svg')
 ROOT_KEYS = {'schema_version','built_at','archive','rivers','rain_stations','weather','updates','limitations'}
+V2_KEYS = ROOT_KEYS | {'earthquakes','discharge','pipeline'}
 RIVER_KEYS = {'id','name','basin','observed_at','level','latitude','longitude','conflicting','units'}
 RAIN_KEYS = {'id','name','observed_at'}
 WEATHER_KEYS = {'place_id','model','fetched_at','sha256','normalized','latest_attempt'}
@@ -34,7 +36,9 @@ LIMITATIONS = [
     'Weather covers seven city points, not catchment rainfall or all of Nepal. Two model outputs are not a confidence interval.',
     'A successful request does not establish complete coverage or sensor accuracy. Missing observations are never treated as zero.',
     'GitHub schedules can be delayed or skipped. Freshness is recalculated in your browser; publication time is not measurement time.',
-    'Historical totals describe the local archive at its stated date. Scheduled public updates refresh observations and weather only.',
+    'Historical incident totals describe the local archive at its stated date; scheduled runs do not refresh that full incident archive.',
+    'GloFAS discharge is a gridded model, not a gauge reading. The selected river reaches are unverified; ensemble percentiles are not calibrated flood probabilities.',
+    'USGS reports past earthquakes in a regional bounding box that includes neighboring countries. This feed cannot predict earthquakes.',
 ]
 
 def write(path, value):
@@ -46,8 +50,8 @@ def require_keys(obj, expected):
     if not isinstance(obj,dict) or set(obj)!=set(expected):raise ValueError('Unexpected public schema keys')
 
 def validate(s):
-    require_keys(s,ROOT_KEYS)
-    if s['schema_version']!=1 or timestamp(s['built_at']) is None:raise ValueError('Invalid snapshot version or timestamp')
+    require_keys(s,V2_KEYS if s.get('schema_version')==2 else ROOT_KEYS)
+    if s['schema_version'] not in (1,2) or timestamp(s['built_at']) is None:raise ValueError('Invalid snapshot version or timestamp')
     require_keys(s['archive'],{'as_of','counts','annual','coverage','quality','audit'})
     if timestamp(s['archive']['as_of']) is None:raise ValueError('Invalid archive timestamp')
     for key,fields in [('rivers',RIVER_KEYS),('rain_stations',RAIN_KEYS)]:
@@ -84,6 +88,9 @@ def validate(s):
     for u in s['updates'].values():
         require_keys(u,{'attempted_at','state','last_success_at','detail'})
         if timestamp(u['attempted_at']) is None:raise ValueError('Invalid attempt time')
+    if s['schema_version']==2:
+        from sources import validate_extensions
+        validate_extensions(s)
     json.dumps(s,allow_nan=False)
     return s
 
@@ -151,9 +158,10 @@ def previous_snapshot():
     seed=validate(json.loads(SEED.read_text()))
     try:
         # A fixed public URL. No arbitrary remote file, credentials or database restore.
-        with urllib.request.urlopen(PUBLIC_URL,timeout=20) as response:
-            if response.geturl()!=PUBLIC_URL:raise ValueError('Unexpected snapshot redirect')
-            raw=response.read(2_000_001)
+        response=subprocess.run(['curl','--fail','--silent','--show-error','--proto','=https',
+                                 '--connect-timeout','10','--max-time','20','--max-filesize','2000000',PUBLIC_URL],
+                                capture_output=True,timeout=25,check=True)
+        raw=response.stdout
         if len(raw)>2_000_000:raise ValueError('Oversized previous snapshot')
         remote=validate(json.loads(raw))
         if timestamp(remote['built_at'])<=time.time()+300 and timestamp(remote['built_at'])>timestamp(seed['built_at']):
@@ -164,35 +172,9 @@ def previous_snapshot():
         print('Previous public snapshot unavailable or invalid; using dated seed:',type(exc).__name__)
     return seed
 
-def refresh(output):
-    from archive import Archive
-    s=copy.deepcopy(previous_snapshot());stamp=now();start=(dt.datetime.now(dt.timezone.utc)-dt.timedelta(hours=3)).isoformat()
-    runtime=ROOT/'runtime/public-refresh';a=Archive(runtime/'archive');a.start('public_recent_snapshot')
-    successful=0
-    try:
-        for feed,field in [('river','water_level_on'),('rain','measured_on')]:
-            state=a.bipad(feed,{field+'__gt':start,field+'__lt':stamp},max_pages=20,window=(start,stamp))
-            previous=s['updates'].get(feed,{})
-            job=a.db.execute('SELECT * FROM collection_runs WHERE run_id=? AND collection=? ORDER BY id DESC LIMIT 1',(a.run_id,'bipad:'+feed)).fetchone()
-            s['updates'][feed]={'attempted_at':now(),'state':state,'last_success_at':now() if state=='traversed' else previous.get('last_success_at'),'detail':f'{job["rows_seen"]} rows in requested three-hour interval; {state}. Empty responses do not imply safe conditions.'}
-            successful+=state=='traversed'
-        rivers,rain=station_rows(a.db)
-        s['rivers']=merge_stations(s['rivers'],rivers);s['rain_stations']=merge_stations(s['rain_stations'],rain)
-        a.db.execute('UPDATE runs SET status=?,finished_at=? WHERE id=?',('completed' if successful==2 else 'partial',now(),a.run_id));a.db.commit()
-    finally:a.db.close()
-    store=ForecastStore(runtime/'weather');results=store.collect(force=True);new=weather_rows(store)
-    merged={(w['place_id'],w['model']):w for w in s['weather']}
-    for w in new:
-        key=(w['place_id'],w['model'])
-        if key not in merged or timestamp(w['fetched_at'])>=timestamp(merged[key]['fetched_at']):merged[key]=w
-    for result in results:
-        key=(result['place'],result['model'])
-        if key in merged:merged[key]['latest_attempt']={'status':result['status'],'fetched_at':now()}
-    s['weather']=list(merged.values());weather_ok=sum(r['status']=='ok' for r in results)
-    s['updates']['weather']={'attempted_at':now(),'state':'completed' if weather_ok==14 else 'partial','last_success_at':now() if weather_ok==14 else s['updates'].get('weather',{}).get('last_success_at'),'detail':f'{weather_ok}/14 forecast requests succeeded; older successes retain their original times.'}
-    if successful==0 and weather_ok==0:raise RuntimeError('All source refreshes failed; retain the previous deployment')
-    s['built_at']=now();s['limitations']=LIMITATIONS;write(output,validate(s))
-    print(json.dumps({'river':s['updates']['river'],'rain':s['updates']['rain'],'weather':s['updates']['weather']},indent=2))
+def refresh(output, state_root=None):
+    from collector import collect
+    return collect(output,Path(state_root) if state_root else ROOT/'runtime/public-state')
 
 def build(snapshot,output):
     s=validate(json.loads(Path(snapshot).read_text()));out=Path(output)
@@ -203,7 +185,7 @@ def build(snapshot,output):
     print('Built allowlisted Pages artifact:',out)
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('command',choices=['export-local','refresh','build']);parser.add_argument('--snapshot',default=str(SEED));parser.add_argument('--output',required=True);args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('command',choices=['export-local','refresh','build']);parser.add_argument('--snapshot',default=str(SEED));parser.add_argument('--state-root');parser.add_argument('--output',required=True);args=parser.parse_args()
     if args.command=='export-local':export_local(args.output)
-    elif args.command=='refresh':refresh(args.output)
+    elif args.command=='refresh':refresh(args.output,args.state_root)
     else:build(args.snapshot,args.output)

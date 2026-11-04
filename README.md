@@ -6,14 +6,14 @@ The public site is designed for GitHub Pages at https://sabin901.github.io/Terra
 
 ## Public dashboard
 
-The `public_site/` app is static, uses relative URLs and needs no API key, account or paid runtime. GitHub Actions requests recent public hydrology observations and 14 Open-Meteo model/location forecasts once per hour at minute 17. Schedules can be delayed, dropped or disabled after repository inactivity; they are not emergency monitoring infrastructure.
+The `public_site/` app is static, uses relative URLs and needs no API key, account or paid runtime. GitHub Actions runs at minute 17 and 47, requesting recent hydrology observations and collecting weather, USGS earthquake reports and experimental GloFAS discharge forecasts when each source becomes due. Public state and selected observation revisions persist on the separate `codex/data-snapshots` branch. Schedules can be delayed, dropped or disabled after repository inactivity; they are not emergency monitoring infrastructure.
 
 - Per-station observation times are separate from page build time.
 - Missing stations retain their last observation and age; absence never becomes zero.
 - Conflicting same-time river values are withheld. Gauge units/datums and thresholds remain unconfirmed.
-- Weather totals require complete future windows and retrieval age at most six hours. Browser checks run every minute.
-- Source failures preserve older successes with their original times. If every source fails, the build fails and the last successful deployment remains available with aging timestamps.
-- The historical archive totals and coverage audit are dated snapshots. Hourly runs do **not** refresh the historical incident archive.
+- Weather totals require complete future windows and retrieval age at most six hours. Freshness checks run every minute; open tabs fetch new snapshots every five minutes and on returning to the tab.
+- Source failures preserve older successes with their original times. Even an all-source outage can publish a failed-attempt health report while older observations keep aging. Storage or validation failures stop publication.
+- The historical archive totals and coverage audit are dated snapshots. Scheduled cloud runs do **not** refresh the historical incident archive.
 - Public output contains only reviewed station summaries, weather model data and aggregate archive evidence. No incident narratives, private notebook, credentials, raw archive, database or backups are published.
 
 ### Run locally
@@ -36,9 +36,9 @@ These public commands use Python's standard library and TLS-verified curl. The p
 
 ### GitHub Pages deployment
 
-In the repository's **Settings → Pages → Build and deployment**, select **GitHub Actions**. The `Publish TerraNepal research dashboard` workflow publishes only `runtime/site`; it never uploads the repository root. A push to `main`, manual workflow dispatch or hourly schedule builds a new artifact. Pull requests validate/build without publishing or fetching live data. Check the Actions deployment result before sharing the URL.
+In the repository's **Settings → Pages → Build and deployment**, select **GitHub Actions**. The `Publish TerraNepal research dashboard` workflow publishes only `runtime/site`; it never uploads the repository root. A push to `main`, manual workflow dispatch or half-hourly schedule builds a new artifact. Pull requests validate/build without publishing or fetching live data. Check the Actions deployment result before sharing the URL.
 
-The local `disaster_archive/` collector remains the durable research archive. CI's temporary collection files are not a durable archive or an off-site backup. Keep running the local collector and its backup process. To update public historical aggregates after a reviewed local maintenance audit, regenerate and review the public seed before committing it. The current export command points to the documented 3 November 2026 recovery audit; update that explicit audit reference for a later release.
+The local `disaster_archive/` collector remains the full raw research archive. Cloud runs now retain compressed public snapshots, selected observation versions, checksums and collection results on a separate data branch. This does not replace raw-response backups: CI's raw collection files are temporary. Keep running the local collector and its backup process. See [backend operations and free-source coverage](public_site/BACKEND.md) for refresh intervals, restore commands, storage limits and source prerequisites. To update public historical aggregates after a reviewed local maintenance audit, regenerate and review the public seed before committing it. The current export command points to the documented 3 November 2026 recovery audit; update that explicit audit reference for a later release.
 
 ## Private research service
 

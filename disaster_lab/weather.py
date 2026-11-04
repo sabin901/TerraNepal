@@ -32,6 +32,7 @@ UNITS = {'time':'unixtime','precipitation':'mm','temperature_2m':'°C','wind_gus
 
 def normalize(payload, place):
     if not isinstance(payload,dict) or payload.get('error'): raise ValueError('Provider returned an error or unexpected shape')
+    if not isinstance(payload.get('hourly_units'),dict) or not isinstance(payload.get('hourly'),dict):raise ValueError('Unexpected weather units or hourly schema')
     if payload.get('utc_offset_seconds')!=0: raise ValueError('Expected UTC timestamps')
     if any(payload.get('hourly_units',{}).get(k)!=v for k,v in UNITS.items()): raise ValueError('Unexpected forecast units')
     lat,lon=payload.get('latitude'),payload.get('longitude')
@@ -101,8 +102,7 @@ class ForecastStore:
         url='https://api.open-meteo.com/v1/forecast?'+urllib.parse.urlencode(params)
         digest=rawfile=normalized=error=None;status='error'
         try:
-            r=subprocess.run(['curl','--fail','--silent','--show-error','--max-time','35','--max-filesize','2000000',url],capture_output=True,timeout=40)
-            if r.returncode: raise ValueError('Fetch failed: '+r.stderr.decode(errors='replace')[:300])
+            r=subprocess.run(['curl','--fail-with-body','--silent','--show-error','--proto','=https','--connect-timeout','10','--max-time','35','--max-filesize','2000000',url],capture_output=True,timeout=40)
             digest=hashlib.sha256(r.stdout).hexdigest();rawfile=digest+'.json'
             if not (self.raw/rawfile).exists():
                 # Publish a complete immutable blob before the database references it.
@@ -110,6 +110,7 @@ class ForecastStore:
                 with tempfile.NamedTemporaryFile(dir=self.raw,delete=False) as out:
                     out.write(r.stdout);temp=Path(out.name)
                 temp.replace(self.raw/rawfile)
+            if r.returncode: raise ValueError('Fetch failed: '+r.stderr.decode(errors='replace')[:300])
             normalized=json.dumps(normalize(json.loads(r.stdout),place),allow_nan=False)
             status='ok'
         except (ValueError,OSError,subprocess.TimeoutExpired) as e:error=str(e)

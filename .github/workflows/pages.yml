@@ -5,14 +5,14 @@ on:
   pull_request:
   workflow_dispatch:
   schedule:
-    - cron: '17 * * * *'
+    - cron: '17,47 * * * *'
 permissions:
   contents: read
 concurrency:
   group: terranepal-pages-${{ github.event_name == 'pull_request' && github.ref || 'production' }}
   cancel-in-progress: false
 jobs:
-  build:
+  validate:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -27,20 +27,38 @@ jobs:
         run: |
           python -m unittest discover -s public_site -p 'test_*.py' -v
           node public_site/test_logic.cjs
+      - name: Build reviewed seed without network access
+        run: python public_site/pipeline.py build --output runtime/site
+  build:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Restore durable public data and watermarks
+        run: python public_site/data_branch.py restore
       - name: Refresh public sources
-        if: github.event_name != 'pull_request'
         run: python public_site/pipeline.py refresh --output runtime/public-snapshot.json
+      - name: Retain selected history before publication
+        id: history
+        run: python public_site/data_branch.py save
       - name: Build reviewed public files only
-        env:
-          EVENT: ${{ github.event_name }}
-        run: |
-          if [ "$EVENT" = 'pull_request' ]; then
-            python public_site/pipeline.py build --output runtime/site
-          else
-            python public_site/pipeline.py build --snapshot runtime/public-snapshot.json --output runtime/site
-          fi
+        run: python public_site/pipeline.py build --snapshot runtime/public-snapshot.json --output runtime/site
+      - name: Retain compact run diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collection-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runtime/public-state/run-report.json
+          retention-days: 14
+          if-no-files-found: ignore
       - uses: actions/upload-pages-artifact@v4
-        if: github.event_name != 'pull_request'
         with:
           path: runtime/site
   deploy:
