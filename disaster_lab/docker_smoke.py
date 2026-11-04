@@ -94,7 +94,8 @@ print('Nonroot fixture initialized; no private data embedded in image')
             assert request('/api/actions')[0]==401
             results.append('logout denies subsequent private API access')
             report={'checked_at':time.time(),'image':docker('image','inspect',IMAGE,'--format','{{.Id}}'),'results':results}
-            (ROOT/'disaster_lab/reports/docker-smoke.json').write_text(json.dumps(report,indent=2)+'\n')
+            (ROOT/'disaster_lab/reports').mkdir(parents=True,exist_ok=True)
+        (ROOT/'disaster_lab/reports/docker-smoke.json').write_text(json.dumps(report,indent=2)+'\n')
             print(json.dumps(report,indent=2))
         finally:
             docker('rm','-f',web,proxy,check=False);docker('volume','rm',volume,check=False);docker('network','rm',network,check=False)
