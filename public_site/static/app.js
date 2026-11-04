@@ -12,10 +12,10 @@ let snapshot,place='kathmandu',hours=24,filter='',stateFilter='all',loadFailed=f
 function counts(){const c={recent:0,delayed:0,stale:0,unknown:0};for(const r of snapshot.rivers){const s=L.freshness(r.observed_at).state;c[s]=(c[s]||0)+1}return c}
 function status(){
  $('#clock').textContent=new Date().toLocaleString('en-GB',{timeZone:'Asia/Kathmandu',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})+' NPT';
- const age=(Date.now()/1000-L.epoch(snapshot.built_at))/3600,problem=Object.values(snapshot.updates).some(u=>['failed','partial','running'].includes(u.state));
+ const age=(Date.now()/1000-L.epoch(snapshot.built_at))/3600,problem=Object.values(snapshot.updates).some(u=>['failed','partial','running'].includes(u.state))||snapshot.pipeline?.quality?.warnings?.length>0;
  const stale=!Number.isFinite(age)||age>2||age<-.084;
  $('#status').classList.toggle('warning',stale||problem||loadFailed);
- $('#status').textContent=(loadFailed?'Page refresh failed; showing the last loaded snapshot. ':stale?'Snapshot needs an update. ':problem?'Some source requests need attention. ':'Published research snapshot. ')+'Built '+date(snapshot.built_at)+' NPT. Each source has its own observation or retrieval time. This is not a live warning feed.';
+ $('#status').textContent=(loadFailed?'Page refresh failed; showing the last loaded snapshot. ':stale?'Snapshot needs an update. ':problem?'Some source data needs attention. ':'Published research snapshot. ')+'Built '+date(snapshot.built_at)+' NPT. Each source has its own observation or retrieval time. This is not a live warning feed.';
 }
 function annualChart(){
  const years=[...new Set(snapshot.archive.annual.map(r=>r.year))].filter(y=>/^\d{4}$/.test(y));
@@ -46,11 +46,12 @@ async function refreshSnapshot(){
   const response=await fetch('./data/snapshot.json',{cache:'no-cache',signal:AbortSignal.timeout(15000)});
   if(!response.ok)throw new Error('Snapshot request failed');
   const next=await response.json(),built=L.epoch(next.built_at);
-  if(![1,2].includes(next.schema_version)||!Array.isArray(next.rivers)||!next.archive||!Number.isFinite(built)||built>Date.now()/1000+300)throw new Error('Unexpected snapshot format');
+  if(![1,2].includes(next.schema_version)||!['rivers','rain_stations','weather','limitations'].every(k=>Array.isArray(next[k]))||!next.archive?.counts||!Array.isArray(next.archive.annual)||!next.updates||!Number.isFinite(built)||built>Date.now()/1000+300)throw new Error('Unexpected snapshot format');
   loadFailed=false;$('#error').hidden=true;
   if(!snapshot||built>L.epoch(snapshot.built_at)){
    const active=document.activeElement,id=active?.id,selection=id==='search'?[active.selectionStart,active.selectionEnd]:null;
-   snapshot=next;render();
+   const prior=snapshot;snapshot=next;
+   try{render()}catch(error){snapshot=prior;if(prior)render();throw error}
    if(id){const el=document.getElementById(id);el?.focus({preventScroll:true});if(selection&&el)el.setSelectionRange(...selection)}
   }else status();
  }catch(e){

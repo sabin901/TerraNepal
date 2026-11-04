@@ -33,12 +33,13 @@ const base=process.env.TERRA_TEST_URL||'http://127.0.0.1:8768/TerraNepal/';
   // A tab open across deployments refreshes data while retaining the active filter.
   const fixture=await (await page.request.get(base+'data/snapshot.json')).json();
   const poll=await browser.newPage();await poll.clock.install({time:new Date()});
-  let requests=0,offline=false;
+  let requests=0,offline=false,malformed=false;
   await poll.route('**/data/snapshot.json',async route=>{
    requests++;
    if(offline){await route.abort();return}
    const next=structuredClone(fixture);
    if(requests>1){next.built_at=new Date(Date.now()+1000).toISOString();next.rivers[0].name='Automatic refresh test station'}
+   if(malformed)delete next.weather;
    await route.fulfill({contentType:'application/json',body:JSON.stringify(next)});
   });
   await poll.goto(base+'#rivers');await poll.locator('#search').waitFor();
@@ -48,6 +49,9 @@ const base=process.env.TERRA_TEST_URL||'http://127.0.0.1:8768/TerraNepal/';
   assert.equal(await poll.locator('#search').inputValue(),'Automatic refresh test station');assert.ok(requests>=2);
   offline=true;await poll.clock.runFor(300100);await poll.waitForFunction(()=>document.querySelector('#status').textContent.includes('refresh failed'));
   assert.equal(await poll.locator('#result-count').innerText(),'1 stations');
+  offline=false;malformed=true;await poll.clock.runFor(300100);
+  assert.equal(await poll.locator('#result-count').innerText(),'1 stations');
+  assert.match(await poll.locator('#status').innerText(),/refresh failed/);
   if(fixture.schema_version===2){
    await page.goto(base+'#weather');await page.getByRole('heading',{name:'Seven model days of river discharge'}).waitFor();
    await page.goto(base+'#evidence');await page.getByRole('heading',{name:'Automatic collection & retained history'}).waitFor();
