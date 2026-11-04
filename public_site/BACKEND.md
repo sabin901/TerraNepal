@@ -44,12 +44,16 @@ prioritized improvements.
 4. Missing or failed feeds retain the previous valid data and its original
    times. A valid empty USGS feed is distinct from a failed request. Source
    timestamps, units, array lengths, coordinates and model-day order are checked.
-5. A compressed immutable file is added under
+5. One or more compressed immutable files are added under
    `history/YYYY-MM-DD/<sha256>.json.gz`. It includes the public snapshot,
    selected observation changes, source response hashes and fetch results.
    The filename hashes the canonical **uncompressed** JSON. Same ID with changed
    selected facts records the previous hash; unchanged overlapping records do
    not create new versions within the eight-day index window.
+   Large catch-up runs are split into parts of at most 16 MiB uncompressed so
+   they stay below the publication verifier's 32 MiB file/decompression cap.
+   Parts share the same snapshot and `pipeline.history_runs` counter; count
+   that counter, not history files, when counting collection runs.
 6. Git commits preserve existing history without checking out or merging the
    application branch. A normal fast-forward push rejects competing writers.
    Publication proceeds only after the data push succeeds. No force push,

@@ -8,6 +8,9 @@ import re
 from pathlib import Path
 import uuid
 
+# Leave headroom below data_branch.MAX_FILE for decompression verification.
+MAX_RUN_PART_BYTES=16*1024*1024
+
 def canonical(value):
     return json.dumps(value,sort_keys=True,ensure_ascii=False,allow_nan=False,separators=(',',':')).encode()
 
@@ -88,12 +91,27 @@ def record_versions(state, rows, at):
 def save_run(root, state, snapshot, changes, fetches):
     root=Path(root);at=snapshot['built_at'];state['runs']+=1
     state['history_started_at']=state['history_started_at'] or at
-    body={'schema_version':1,'recorded_at':at,'snapshot':snapshot,'observation_changes':changes,'fetches':fetches}
-    raw=canonical(body);sha=hashlib.sha256(raw).hexdigest()
-    target=root/'history'/at[:10]/(sha+'.json.gz');target.parent.mkdir(parents=True,exist_ok=True)
-    blob=gzip.compress(raw,mtime=0)
-    if target.exists() and target.read_bytes()!=blob:raise ValueError('Immutable history collision')
-    target.write_bytes(blob)
+    body={'schema_version':1,'recorded_at':at,'snapshot':snapshot,'observation_changes':[],'fetches':fetches}
+    base_size=len(canonical(body))
+    if base_size>MAX_RUN_PART_BYTES:raise ValueError('Snapshot and fetch receipts exceed history part budget')
+    parts=[];part=[];size=base_size
+    for change in changes:
+        change_size=len(canonical(change))
+        if base_size+change_size>MAX_RUN_PART_BYTES:raise ValueError('One observation version exceeds history part budget')
+        extra=change_size+bool(part)  # comma between array elements
+        if size+extra>MAX_RUN_PART_BYTES:
+            parts.append(part);part=[];size=base_size;extra=change_size
+        part.append(change);size+=extra
+    if part or not parts:parts.append(part)
+    compressed_bytes=0
+    for part in parts:
+        raw=canonical({**body,'observation_changes':part})
+        if len(raw)>MAX_RUN_PART_BYTES:raise ValueError('History part sizing mismatch')
+        sha=hashlib.sha256(raw).hexdigest()
+        target=root/'history'/at[:10]/(sha+'.json.gz');target.parent.mkdir(parents=True,exist_ok=True)
+        blob=gzip.compress(raw,mtime=0)
+        if target.exists() and target.read_bytes()!=blob:raise ValueError('Immutable history collision')
+        target.write_bytes(blob);compressed_bytes+=len(blob)
     for name,value in [('latest.json',snapshot),('state.json',state)]:
         tmp=root/(name+'.'+uuid.uuid4().hex+'.tmp');tmp.write_bytes(canonical(value)+b'\n');tmp.replace(root/name)
-    return {'new_observation_versions':len(changes),'compressed_run_bytes':len(blob),'run_number':state['runs']}
+    return {'new_observation_versions':len(changes),'compressed_run_bytes':compressed_bytes,'history_files_written':len(parts),'run_number':state['runs']}

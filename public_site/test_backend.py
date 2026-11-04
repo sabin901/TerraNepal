@@ -160,6 +160,31 @@ class HistoryContracts(unittest.TestCase):
               'observation_changes':[{'record':row,'sha256':history.digest(row),'previous_sha256':None,'provenance':{}}],'fetches':[]}
         name='history/2026-11-04/'+history.digest(body)+'.json.gz'
         with self.assertRaises(ValueError):branch.verify_file(name,gzip.compress(history.canonical(body),mtime=0))
+    def test_large_catchup_splits_without_losing_versions_or_counting_extra_runs(self):
+        snapshot=json.loads(p.SEED.read_text());state=history.fresh_state();changes=[]
+        for i in range(13):
+            row={'source':'bipad:river','id':str(i),'station_id':'2','observed_at':sources.iso(AT),'units':'unconfirmed source units','values':{'level':i}}
+            changes.append({'record':row,'sha256':history.digest(row),'previous_sha256':None,
+                            'provenance':{'response_sha256':'a'*64,'source_record_sha256':'b'*64,'fetched_at':sources.iso(AT)}})
+        base={'schema_version':1,'recorded_at':snapshot['built_at'],'snapshot':snapshot,'observation_changes':[],'fetches':[]}
+        limit=len(history.canonical(base))+3*(len(history.canonical(changes[0]))+1)
+        with tempfile.TemporaryDirectory() as temp,patch.object(history,'MAX_RUN_PART_BYTES',limit):
+            report=history.save_run(temp,state,snapshot,changes,[])
+            files=list(Path(temp).rglob('*.json.gz'));self.assertGreater(len(files),1)
+            recovered=[]
+            for path in files:
+                raw=gzip.decompress(path.read_bytes());self.assertLessEqual(len(raw),limit)
+                body=branch.verify_file(path.relative_to(temp).as_posix(),path.read_bytes())
+                recovered.extend(body['observation_changes']);self.assertEqual(body['snapshot'],snapshot)
+            self.assertEqual({c['sha256'] for c in recovered},{c['sha256'] for c in changes})
+            self.assertEqual(len(recovered),len(changes));self.assertEqual(state['runs'],1)
+            self.assertEqual(report['history_files_written'],len(files));self.assertEqual(history.load_state(temp)['runs'],1)
+    def test_single_oversized_history_record_fails_without_publishing_state(self):
+        snapshot=json.loads(p.SEED.read_text());state=history.fresh_state()
+        base={'schema_version':1,'recorded_at':snapshot['built_at'],'snapshot':snapshot,'observation_changes':[],'fetches':[]}
+        with tempfile.TemporaryDirectory() as temp,patch.object(history,'MAX_RUN_PART_BYTES',len(history.canonical(base))+100):
+            with self.assertRaises(ValueError):history.save_run(temp,state,snapshot,[{'oversized':'x'*1000}],[])
+            self.assertFalse((Path(temp)/'latest.json').exists());self.assertFalse((Path(temp)/'state.json').exists())
     def test_failed_new_sources_preserve_original_values_and_times(self):
         old={'fetched_at':sources.iso(AT-86400),'sha256':'a'*64,'url':sources.USGS_URL,'normalized':sources.normalize_quakes(quake_fixture(),AT)}
         snapshot={'earthquakes':copy.deepcopy(old),'discharge':[],'updates':{}}
