@@ -21,6 +21,12 @@ uses minute 17 and 47 rather than the top of the hour. An open browser fetches a
 new snapshot every five minutes, on returning to the tab, and after reconnection.
 Station ages are recalculated every minute. Filters survive a data refresh.
 
+Numeric public discharge outlooks are withheld until the returned model cell is
+verified against the intended river reach. All six current mappings are
+unverified; their model data remain in the research JSON and history. See the
+[4 November review](REVIEW-2026-11-04.md) for the spatial-sensitivity check and
+prioritized improvements.
+
 ## Persistence and recovery
 
 1. The non-PR job restores `latest.json` and `state.json` from

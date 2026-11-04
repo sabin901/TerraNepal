@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict');
-const {freshness,windowSummary}=require('./static/logic.js');
+const {freshness,windowSummary,dischargeState}=require('./static/logic.js');
 const at=Date.parse('2026-11-03T18:00:00Z')/1000;
 assert.equal(freshness('2026-11-03T17:00:00Z',at).state,'recent');
 assert.equal(freshness('2026-11-01T17:00:00Z',at).state,'stale');
@@ -15,4 +15,12 @@ assert.equal(windowSummary(s,24,at).total,null); // Missing must not become zero
 assert.equal(windowSummary(s,24,at).valid,23);
 assert.equal(windowSummary(null,24,at).total,null);
 assert.equal(windowSummary({...s,fetched_at:'invalid'},24,at).total,null);
-console.log('12 freshness and forecast assertions passed');
+const discharge={fetched_at:'2026-11-03T18:00:00Z',normalized:{reach_verified:false}};
+for(const flag of [false,null,undefined,'true']){
+ assert.equal(dischargeState({...discharge,normalized:{reach_verified:flag}},at),'mapping unverified');
+}
+assert.equal(dischargeState(null,at),'unavailable');
+assert.equal(dischargeState({...discharge,normalized:{reach_verified:true}},at),'experimental model output');
+assert.equal(dischargeState({...discharge,normalized:{reach_verified:true}},at+25*3600),'stale / unavailable');
+assert.equal(dischargeState({...discharge,normalized:{reach_verified:true}},at-1),'stale / unavailable');
+console.log('20 freshness, forecast and river-mapping assertions passed');

@@ -20,6 +20,12 @@
     if(age>=0&&age<=6&&result.points.every(p=>p&&finite(p.wind_gusts_10m)))result.gust=Math.max(...result.points.map(p=>p.wind_gusts_10m));
     return result;
   }
-  const exports={finite,epoch,freshness,windowSummary};
+  function dischargeState(source,at=Date.now()/1000){
+    if(!source)return 'unavailable';
+    if(source.normalized?.reach_verified!==true)return 'mapping unverified';
+    const age=(at-epoch(source.fetched_at))/3600;
+    return !Number.isFinite(age)||age<0||age>24?'stale / unavailable':'experimental model output';
+  }
+  const exports={finite,epoch,freshness,windowSummary,dischargeState};
   if(typeof module!=='undefined')module.exports=exports;else root.TerraLogic=exports;
 })(typeof globalThis!=='undefined'?globalThis:this);

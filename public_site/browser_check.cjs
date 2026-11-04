@@ -54,6 +54,15 @@ const base=process.env.TERRA_TEST_URL||'http://127.0.0.1:8768/TerraNepal/';
   assert.match(await poll.locator('#status').innerText(),/refresh failed/);
   if(fixture.schema_version===2){
    await page.goto(base+'#weather');await page.getByRole('heading',{name:'Seven model days of river discharge'}).waitFor();
+   const dischargePanel=page.locator('section').filter({has:page.getByRole('heading',{name:'Seven model days of river discharge'})});
+   const unverified=fixture.discharge.filter(f=>f.normalized.reach_verified!==true).length;
+   assert.equal(await dischargePanel.locator('summary').filter({hasText:'mapping unverified'}).count(),unverified);
+   for(const detail of await dischargePanel.locator('details').all()){
+    if((await detail.locator('summary').innerText()).includes('mapping unverified')){
+     await detail.locator('summary').click();
+     for(const cell of await detail.locator('tbody td:nth-child(2), tbody td:nth-child(3)').all())assert.ok(!(await cell.innerText()).match(/[0-9]/),'Unverified reach has no numeric public forecast');
+    }
+   }
    await page.goto(base+'#evidence');await page.getByRole('heading',{name:'Automatic collection & retained history'}).waitFor();
    await page.getByRole('heading',{name:'Regional earthquake catalog'}).waitFor();
   }
