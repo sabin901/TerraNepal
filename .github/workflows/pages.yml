@@ -29,6 +29,7 @@ jobs:
           node public_site/test_logic.cjs
           python -m unittest discover -s disaster_lab -p 'test_forecast_runs.py'
           python -m unittest discover -s disaster_lab -p 'test_ghcnh.py'
+          python -m unittest discover -s disaster_lab -p 'test_weather_evaluation.py'
       - name: Build reviewed seed without network access
         run: python public_site/pipeline.py build --output runtime/site
   build:

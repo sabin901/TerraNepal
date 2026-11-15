@@ -141,3 +141,7 @@ stored forecasts from recent, complete future windows. Hosting remains GitHub-on
 The configured schedule is not a delivery guarantee, and a job cannot independently
 detect that its own scheduler stopped. Verified station-to-grid mappings, prospective
 scoring, calibrated model corrections and sector-specific validation remain outstanding.
+
+An offline paired evaluator now checks availability, mapping attestations, units,
+periods and duplicate targets before reporting MAE and bias. Its tests are synthetic;
+no real forecast skill has yet been measured by this module.
