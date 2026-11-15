@@ -61,7 +61,7 @@ def normalize(payload, place, model=None):
             if k=='time': continue
             v=hourly[k][i]
             if v is not None and (not number(v) or not PLAUSIBILITY_LIMITS[k][0]<=v<=PLAUSIBILITY_LIMITS[k][1]):
-                raise ValueError('Invalid numeric forecast value: '+k)
+                raise ValueError(f'Invalid numeric forecast value: {k}; index={i}; at={iso(t)}; value={repr(v)[:80]}; allowed={PLAUSIBILITY_LIMITS[k][0]}..{PLAUSIBILITY_LIMITS[k][1]} {UNITS[k]}')
             point[k]=v
         points.append(point)
     return {'grid_latitude':lat,'grid_longitude':lon,'elevation':payload.get('elevation'),

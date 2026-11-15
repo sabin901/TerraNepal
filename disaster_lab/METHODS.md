@@ -1,16 +1,28 @@
-# Nepal Disaster Lab — methods, version 2
+# Nepal Disaster Lab — implemented methods
 
-Implemented and checked 30 September 2026 UTC. This local release provides weather outlooks and experimental station-level modeling. It does not estimate validated disaster probabilities or issue public warnings. Consistency checks cannot establish that a source measurement is true.
+River methods originally documented 30 September 2026 UTC; weather acquisition and verification documentation reconciled 15 November 2026. The research service provides weather outlooks and experimental station-level modeling. It does not estimate validated disaster probabilities or issue public warnings. Consistency checks cannot establish that a source measurement is true.
 
 ## Weather: two explicitly selected forecast models
 
 The collector requests ECMWF IFS 0.25° (`ecmwf_ifs025`) and NOAA GFS global (`gfs_global`) through Open-Meteo. Seven approximate city coordinates provide illustrative coverage: Kathmandu, Pokhara, Biratnagar, Janakpur, Nepalgunj, Birendranagar and Dhangadhi. These points are not surveyed stations, catchment averages, administrative polygons or nationwide coverage.
 
-Each source response is saved unchanged, SHA-256 hashed, and linked to its request URL, retrieval timestamp and normalized values in SQLite. Single-location requests avoid positional ambiguity between places. The normalizer requires expected units, an hourly ordered time axis, equal array lengths, plausible coordinate correspondence and finite numeric values. Nulls remain missing. Zero precipitation remains zero. Failed attempts are recorded without replacing the last valid snapshot.
+Each source response is saved unchanged, SHA-256 hashed, and linked to its request URL, retrieval timestamp and normalized values in SQLite. Single-location requests avoid positional ambiguity between places. The normalizer requires expected units, an hourly ordered time axis, equal array lengths, plausible coordinate correspondence and finite numeric values. Nulls remain missing. Zero precipitation remains zero. Nonfinite and physically implausible values reject the whole response under the current normalized schema; diagnostic errors identify the variable, sample index/time, value and permitted bounds. Negative precipitation is not clamped to zero. Per-variable partial acceptance would require explicit quality provenance and a separately reviewed schema change. Failed attempts are recorded without replacing the last valid snapshot.
 
 Forecast variables are total precipitation (mm of water equivalent, including snow), 2 m temperature (°C), and 10 m wind gusts (m/s). Precipitation labeled at time t covers the preceding hour. Summary windows start at the next whole UTC hour, so partially elapsed hours are excluded. A 24-hour total requires all 24 hourly amounts; a 72-hour total requires all 72. A missing hour never becomes a dry hour. The interface shows window boundaries in Nepal time. Values older than six hours since retrieval have their summary values withheld; six hours is a local display rule, not a provider guarantee. Stored charts remain inspectable with their age shown.
 
-The endpoint does not provide a model run issuance timestamp. We preserve `model_issued_at = null`; retrieval time and the API's computation duration are not substituted for it. This limits exact lead-time verification. Future work should ingest explicitly identified original forecast runs before claiming forecast skill by lead time.
+The rolling public endpoint does not provide a model run issuance timestamp. We preserve `model_issued_at = null`; retrieval time and the API's computation duration are not substituted for it. A separate implemented collector, `forecast_runs.py`, requests explicitly initialized original runs. Its `initialized_at` is the requested reference time, not publication time; `published_at` remains null when unknown. The request URL and returned time axis are checked, but the response does not independently echo the requested run identity. Acquiring an old run now does not establish that users had it at initialization.
+
+The GitHub workflow invokes `public_site/weather_evidence.py` to attempt the latest six-hour initialization at least eight hours old. Successful per-location/model runs are deduplicated, failed requests retry no sooner than an hour, and missed initializations are not automatically backfilled. The original-run step has a six-minute budget; it may fail independently of otherwise valid public snapshot publication. See [original-run acquisition](ORIGINAL_RUNS.md).
+
+Exact permitted weather response bytes, including error responses, are retained in attributed, content-addressed gzip envelopes on the data branch. Hashes bind the envelope and raw response; receipt validation requires a referenced evidence blob. Rolling responses also have a 90-day Actions recovery artifact when durable publication fails. This does not extend permission to publish raw BIPAD data and does not establish complete forecast-run coverage.
+
+### Weather verification and geographic review
+
+`weather_evaluation.py` implements offline matched-case evaluation with timezone-aware chronology, compatible units and accumulation windows, canonical observation-conflict exclusion, and identical-case provider comparisons. Reports distinguish decision lead, model initialization lead and run age. Legacy initialization assumptions remain labelled. Scores on different provider cohorts cannot establish a provider ranking. See [evaluation contract](WEATHER_EVALUATION.md).
+
+`station_registry.py` inventories GHCNh station metadata, provenance and coordinate/elevation variants. It measures distances to requested city points, not native model cells, and never approves a mapping. The existing local inventory contains 17 candidate stations and zero verified mappings. See [station registry](STATION_REGISTRY.md). The evaluator's mapping and quality fields are caller attestations, not independent verification.
+
+These implemented tools are a verification foundation, not evidence of locally improved weather skill. Verified station/grid representativeness, compatible independent observations, chronological/geographic holdouts, uncertainty and extreme-event evaluation remain required. No real Nepal-wide forecast accuracy score or calibrated flood probability has been established.
 
 The two-model range and absolute difference are descriptive comparisons, not ensemble probabilities or confidence intervals. Both models may share errors. Hourly output may be interpolated from coarser native timesteps. Mountain rainfall extremes and local flash flooding may be unresolved. Rainfall is not converted directly into flood severity.
 
@@ -18,7 +30,7 @@ Primary provider documentation and terms:
 
 - [Open-Meteo ECMWF documentation](https://open-meteo.com/en/docs/ecmwf-api): selected model, native resolution and temporal interpolation.
 - [Open-Meteo NOAA GFS documentation](https://open-meteo.com/en/docs/gfs-api): variables and forecast models.
-- [Open-Meteo terms](https://open-meteo.com/en/terms): free API for non-commercial use, rate limits, CC BY 4.0 attribution and availability limitations. This personal local prototype uses that access; commercial deployment requires a suitable license.
+- [Open-Meteo terms](https://open-meteo.com/en/terms): free API for non-commercial use, rate limits, CC BY 4.0 attribution and availability limitations. The current research collection uses that access; commercial use of the hosted service requires an appropriate permitted arrangement. Open data licensing and hosted API access terms are separate.
 - [ECMWF open data](https://www.ecmwf.int/en/forecasts/datasets/open-data): underlying public forecast products.
 
 Collector policy: at most three concurrent requests; fourteen requests on a full uncached collection; successful pairs cached for one hour and failed pairs for five minutes. Manual refresh runs observation and weather collection, then saves all eligible 30-minute, 1-hour and 3-hour river projections. The previously configured daily archive automation continues collecting the observation archive; use the complete refresh command for both datasets. This is not continuous emergency monitoring.

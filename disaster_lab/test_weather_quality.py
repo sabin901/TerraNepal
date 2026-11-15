@@ -1,4 +1,4 @@
-"""Synthetic quarantine tests, not evidence of corrupted live forecasts."""
+"""Synthetic regression tests for physical-value quarantine and diagnostics."""
 import copy
 import unittest
 import test_forecast_runs as fixtures
@@ -13,6 +13,21 @@ class WeatherQualityTests(unittest.TestCase):
         for elevation in ['1300',True,float('inf'),9001,-501]:
             p=fixtures.OriginalRuns().payload();p['elevation']=elevation
             with self.assertRaises(ValueError):normalize(p,PLACES[0])
+    def test_negative_precipitation_reports_exact_sample_without_clamping(self):
+        # Mirrors the value class observed in retained ECMWF responses, without
+        # treating a negative quantity as dry weather or silently accepting it.
+        p=fixtures.OriginalRuns().payload()
+        p['hourly']['precipitation'][17]=-0.1
+        original=copy.deepcopy(p)
+        with self.assertRaises(ValueError) as raised:
+            normalize(p,PLACES[0],'ecmwf_ifs025')
+        message=str(raised.exception)
+        self.assertIn('precipitation; index=17;',message)
+        self.assertIn('value=-0.1; allowed=0..2000 mm',message)
+        from analytics import iso
+        self.assertIn('at='+iso(p['hourly']['time'][17]),message)
+        self.assertEqual(p,original)
+
     def test_zero_null_and_extreme_but_in_envelope_preserved(self):
         p=fixtures.OriginalRuns().payload();p['hourly']['precipitation'][:3]=[0,None,500]
         p['elevation']=None

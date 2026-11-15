@@ -1,6 +1,8 @@
-# TerraNepal
+# TerraRaksha
 
 A public research dashboard for Nepal's river observations, weather outlooks and disaster archive coverage. **Research beta: this project does not issue disaster warnings or validated flood probabilities.**
+
+TerraRaksha is the current product name; the existing `TerraNepal` repository and deployment path are retained so links and data history remain intact. The name change does not imply trademark registration or government affiliation.
 
 The public site is designed for GitHub Pages at https://sabin901.github.io/TerraNepal/. Availability depends on the repository's Pages configuration and the latest successful deployment.
 

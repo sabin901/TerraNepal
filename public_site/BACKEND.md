@@ -194,3 +194,31 @@ On collection failure: inspect job diagnostics and weather recovery artifact; ke
 the last valid published snapshot dated; fix the failing source/contract and rerun.
 Do not reset durable state, invent new timestamps, or turn missing values into zero.
 The GitHub-only scheduler remains best effort; visible age is not independent alerting.
+
+## Dated intelligence brief
+
+Every static build now exports `data/situation-brief.json` and `situation-brief.md`.
+`intelligence.py` binds an explicit assessment time, normalized snapshot SHA-256,
+engine version and deterministic brief ID to per-provider weather summaries,
+river availability/conflicts and twelve sector evidence gaps. This is evidence
+analysis, not exposure modelling, a hazard probability or a warning.
+
+Each complete variable window is evaluated independently. Missing or stale values
+are withheld; latest failed attempts stay visible. No averaging of model values
+into confidence is performed. Original response hashes are references, not proof
+that this brief has independently reverified raw response bytes. Build time is not
+deployment/delivery time. Exported briefs are dated and do not refresh themselves.
+
+Replay a saved public snapshot with a timezone-aware assessment cutoff:
+
+```sh
+python public_site/intelligence.py runtime/saved-snapshot.json \
+  --at 2026-11-15T20:30:00Z --hours 24 \
+  --output runtime/replayed-brief.json
+```
+
+This also writes `runtime/replayed-brief.md`. Both output paths must be unused and
+must not overwrite input evidence. Future evidence is rejected even inside the
+ordinary health monitor's clock-skew tolerance. This is replay of a saved snapshot,
+not reconstruction of undocumented historical source delivery. The public build
+includes the exact snapshot needed to reproduce the brief.

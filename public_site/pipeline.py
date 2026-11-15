@@ -7,6 +7,7 @@ import datetime as dt
 import hashlib
 import json
 import math
+import re
 from pathlib import Path
 import shutil
 import sqlite3
@@ -73,6 +74,7 @@ def validate(s):
         if pair in seen or w['place_id'] not in {p['id'] for p in PLACES} or w['model'] not in MODELS:raise ValueError('Unexpected weather location/model')
         seen.add(pair)
         if timestamp(w['fetched_at']) is None:raise ValueError('Invalid forecast retrieval time')
+        if not isinstance(w['sha256'],str) or not re.fullmatch(r'[0-9a-f]{64}',w['sha256']):raise ValueError('Invalid weather response hash')
         n=w['normalized'];require_keys(n,{'grid_latitude','grid_longitude','elevation','units','points','model_issued_at','time_note'})
         if n['model_issued_at'] is not None:raise ValueError('Issuance not supplied by source')
         if not 72<=len(n['points'])<=200:raise ValueError('Unexpected forecast length')
@@ -186,13 +188,19 @@ def refresh(output, state_root=None):
 def build(snapshot,output):
     s=json.loads(Path(snapshot).read_text());out=Path(output)
     from health import report as health_report
-    availability=health_report(s)
+    epoch_now=time.time()
+    availability=health_report(s, at=epoch_now)
     if availability['status']=='invalid':
         raise ValueError('Invalid publication health: '+'; '.join(availability['errors']))
+    from intelligence import brief, markdown
+    assessment = brief(s, at=epoch_now)
     if out.exists() and any(out.iterdir()):raise ValueError('Build destination must be empty')
     out.mkdir(parents=True,exist_ok=True)
     for name in ASSETS:shutil.copyfile(Path(__file__).with_name('static')/name,out/name)
-    write(out/'data/snapshot.json',s);(out/'.nojekyll').touch()
+    write(out/'data/snapshot.json',s)
+    write(out/'data/situation-brief.json',assessment)
+    (out/'situation-brief.md').write_text(markdown(assessment))
+    (out/'.nojekyll').touch()
     print('Built allowlisted Pages artifact:',out)
 
 if __name__=='__main__':

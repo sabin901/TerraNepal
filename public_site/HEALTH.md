@@ -63,3 +63,9 @@ New river/rain rows beyond the clock-skew allowance are excluded from the displa
 and listed in the health report's `quarantined_observations`, with station ID,
 source, timestamp and reason. Previous valid readings remain. Source evidence is
 retained by the raw-response retention path; quarantine does not modify it.
+
+The dated intelligence brief applies a stricter chronology gate than availability
+health: every source/attempt timestamp must be at or before its assessment cutoff.
+Thus a snapshot inside health's 300-second skew tolerance may still be blocked by
+the static build. This prevents future evidence entering a replay. Assessment time
+is normalized to the exact microsecond precision stored in the exported brief.
