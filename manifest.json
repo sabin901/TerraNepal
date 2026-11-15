@@ -1,1 +1,1 @@
-{"history_files": 51, "schema_version": 1, "sha256": {"latest.json": "1a36fcd54b0b6c0aedd0a621a8a42d22b5e1894004983cea89db94003c49fbea", "state.json": "8cb10d3f65072a7998e11c6150db4063711bef642ae73900e8d5181ecd38b0b8"}}
+{"history_files": 52, "schema_version": 1, "sha256": {"latest.json": "ed33fb876ff4a10e5ea79353ebd796d2940963411fd8f9fe444114de11dc54e2", "state.json": "51baf1992ef9e49d4451b9d25b5b92aac5ff766d9d95acea744300b4febe6d0f", "weather-evidence-state.json": "baa2027cba9fc79b333596ee04714f4c6c6a5bffa4a5482e402d6bf0b6867488"}, "weather_evidence_files": 18}
