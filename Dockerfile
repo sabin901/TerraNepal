@@ -7,6 +7,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY disaster_lab ./disaster_lab
+COPY public_site ./public_site
 COPY disaster_archive ./disaster_archive
 COPY planning ./planning
 COPY source-ledger.json .

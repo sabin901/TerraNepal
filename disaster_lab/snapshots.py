@@ -25,7 +25,8 @@ class SnapshotCache:
     def get(self):
         if self.current is None:raise OSError('Read snapshot unavailable')
         return self.current
-    def start(self):
+    def start(self,initial=False):
         def loop():
+            if initial and not self.stop.is_set():self.refresh()
             while not self.stop.wait(self.interval):self.refresh()
         threading.Thread(target=loop,name='read-snapshot',daemon=True).start()

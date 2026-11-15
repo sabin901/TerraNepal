@@ -53,3 +53,16 @@ As of the 3 November 2026 local audit: 65,160 BIPAD incident reports, 597,073 ri
 Source attribution: Nepal BIPAD and originating agencies; Open-Meteo, ECMWF and NOAA (weather data CC BY 4.0, free API for noncommercial use); USGS regional earthquake catalog. BIPAD's bulk redistribution license has not been verified. No blanket license for third-party datasets is granted by this repository. Read the source terms before expanding redistribution or commercial use.
 
 Use Nepal's [DHM](https://dhm.gov.np/) and [BIPAD](https://bipadportal.gov.np/) for authoritative information. Source byte integrity and passing software tests do not establish physical sensor accuracy or severe-event predictive reliability.
+
+### Private disaster-intelligence workflow
+
+The local authenticated backend now includes an append-only case ledger, dated
+replay, action/outcome records, and conservative asset/footprint exposure analysis.
+Run `.venv/bin/python disaster_lab/production.py --local --port 8782` and open
+`http://127.0.0.1:8782/workspace.html`. This private workspace is not hosted by Pages.
+See [case contracts](disaster_lab/CASES.md), [exposure methods](disaster_lab/EXPOSURE.md)
+and [deployment instructions](disaster_lab/DEPLOYMENT.md).
+
+A [direct NOAA GFS research importer](disaster_lab/DIRECT_GFS.md) now preserves
+native forecast intervals as a future commercial-data option. It is separate from
+the current public weather pipeline and has not established local predictive skill.

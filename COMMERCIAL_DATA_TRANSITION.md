@@ -155,3 +155,12 @@ remain model discharge, not verified gauges, inundation depth or calibrated floo
 5. https://github.com/ecmwf/ecmwf-opendata
 6. https://open-meteo.com/en/terms
 7. https://www.nco.ncep.noaa.gov/pmb/products/gfs/gfs.t00z.pgrb2.0p25.f003.shtml
+
+## Implemented bounded experiment — 15 November 2026
+
+The first direct-GFS trial is now implemented in `disaster_lab/direct_gfs.py`;
+see `disaster_lab/DIRECT_GFS.md` for commands, source contracts and measurements.
+It acquired/decoded six real native field requests, retained exact raw evidence,
+and replayed it. This replaces the earlier "not executed" status only for that
+bounded experiment. It does not switch the public providers, clear other source
+rights, establish local forecast accuracy or complete the commercial migration.

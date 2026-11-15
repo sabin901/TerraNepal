@@ -22,6 +22,8 @@ from data import ROOT, csv_safe
 from analytics import analyze, quality_audit
 from operations import Operations, state_root
 from snapshots import SnapshotCache
+from cases import CaseStore
+from exposure import assess as assess_exposure
 
 LOGIN='''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · Nepal Disaster Lab</title><link rel="stylesheet" href="/login.css"></head><body><main class="login-card"><div class="brand">◭ NEPAL DISASTER LAB</div><p class="eyebrow">PRIVATE RESEARCH WORKSPACE</p><h1>Evidence for<br>better preparation.</h1><p>Sign in to explore observations, weather outlooks and experimental river models.</p><form method="post" action="/login"><input type="hidden" name="token" value="{{ token }}"><label for="password">Workspace password</label><input id="password" name="password" type="password" autocomplete="current-password" required maxlength="1024"><button type="submit">Open workspace →</button></form>{% if error %}<p role="alert" class="error">{{ error }}</p>{% endif %}<small>This research workspace does not issue disaster warnings.</small></main></body></html>'''
 
@@ -64,10 +66,10 @@ def create_app(root=ROOT,state=None,local=False,hosts=None,origin=None):
         SESSION_COOKIE_SECURE=not local,SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE='Strict',
         PERMANENT_SESSION_LIFETIME=dt.timedelta(hours=8),SESSION_REFRESH_EACH_REQUEST=False)
     backend=App(root,state);ops=Operations(state);view_lock=threading.RLock()
+    cases=CaseStore(state/'cases')
     cache=SnapshotCache(root)
-    if backend.dataset.path.exists():cache.refresh()
-    cache.start()
-    app.extensions.update(lab=backend,operations=ops,snapshots=cache)
+    cache.start(initial=backend.dataset.path.exists())
+    app.extensions.update(lab=backend,operations=ops,snapshots=cache,cases=cases)
     def json_response(value,status=200,download=None):
         response=Response(json.dumps(value,ensure_ascii=False,allow_nan=False),status=status,content_type='application/json; charset=utf-8')
         if download:response.headers['Content-Disposition']='attachment; filename="'+download+'"'
@@ -130,10 +132,18 @@ def create_app(root=ROOT,state=None,local=False,hosts=None,origin=None):
         if request.method=='POST':
             obj=request.get_json()
             if not isinstance(obj,dict):raise ValueError('Expected an object')
+            if name=='cases':return json_response(cases.append_revision(obj.get('case_id'),obj.get('document')),201)
+            if name=='case-actions':return json_response(cases.append_action(obj.get('case_id'),obj.get('document')),201)
+            if name=='case-outcomes':return json_response(cases.append_outcome(obj.get('case_id'),obj.get('document')),201)
+            if name=='exposure':return json_response(assess_exposure(obj.get('hazards'),obj.get('assets'),obj.get('at'),obj.get('valid_at')))
             if name=='actions':return json_response(backend.state.save(obj),201)
             if name=='refresh':return json_response(ops.request(),202)
             return json_response({'error':'Not found'},404)
         q=request.args
+        if name=='cases':
+            cutoff=q.get('cutoff') or dt.datetime.now(dt.timezone.utc).isoformat()
+            return json_response(cases.replay(q['id'],cutoff) if q.get('id') else cases.list_cases(cutoff))
+        if name=='case-integrity':return json_response(cases.verify())
         if name=='session':return json_response({'token':csrf(),'authenticated':not local})
         if name=='operations':return json_response({**ops.status(),'read_snapshot':{'loaded_at':cache.loaded_at,'error':cache.last_error}})
         if name=='refresh':return json_response(ops.refresh_status())
@@ -174,7 +184,7 @@ def create_app(root=ROOT,state=None,local=False,hosts=None,origin=None):
     def files(path='index.html'):
         docs={'guide':Path(root)/'disaster_lab/README.md','methods':Path(root)/'disaster_lab/METHODS.md','research':Path(root)/'planning/hazard-data-and-scientific-method.md'}
         if path in docs:return Response(docs[path].read_bytes(),content_type='text/plain; charset=utf-8')
-        allowed={'index.html':'text/html','app.js':'text/javascript','forecast.js':'text/javascript','style.css':'text/css','modern.css':'text/css','nepal.geojson':'application/geo+json','favicon.svg':'image/svg+xml'}
+        allowed={'workspace.html':'text/html','workspace.js':'text/javascript','workspace.css':'text/css','index.html':'text/html','app.js':'text/javascript','forecast.js':'text/javascript','style.css':'text/css','modern.css':'text/css','nepal.geojson':'application/geo+json','favicon.svg':'image/svg+xml'}
         if path not in allowed:return json_response({'error':'Not found'},404)
         return Response((STATIC/path).read_bytes(),content_type=allowed[path]+'; charset=utf-8')
     return app

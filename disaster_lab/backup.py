@@ -38,10 +38,13 @@ def create(archive=None,state=None,output=None):
     files={};manifest={'format':1,'created_at':time.time(),'files':{},'note':'Per-database consistent snapshots. Raw files referenced by each snapshot are included. Exports are regenerated. Credentials and session keys are excluded; reinitialize owner login after restore.'}
     with tempfile.TemporaryDirectory(dir=output.parent,prefix='.backup-') as temp:
         temp=Path(temp)
-        for source,name in [(archive/'data/archive.sqlite','archive/data/archive.sqlite'),(state/'forecasts.sqlite','state/forecasts.sqlite'),(state/'actions.sqlite','state/actions.sqlite'),(state/'operations.sqlite','state/operations.sqlite')]:
+        for source,name in [(archive/'data/archive.sqlite','archive/data/archive.sqlite'),(state/'forecasts.sqlite','state/forecasts.sqlite'),(state/'actions.sqlite','state/actions.sqlite'),(state/'operations.sqlite','state/operations.sqlite'),(state/'cases/cases.sqlite','state/cases/cases.sqlite')]:
             if not source.exists():continue
             dest=temp/name;dest.parent.mkdir(parents=True,exist_ok=True);snapshot(source,dest);files[name]=dest
         if 'archive/data/archive.sqlite' not in files:raise ValueError('No archive database to back up')
+        if 'state/cases/cases.sqlite' in files:
+            from cases import CaseStore
+            CaseStore(files['state/cases/cases.sqlite'].parent).verify()
         with contextlib.closing(sqlite3.connect(files['archive/data/archive.sqlite'])) as db:
             for (raw,) in db.execute('SELECT DISTINCT raw_path FROM fetches WHERE raw_path IS NOT NULL'):
                 safe_path('archive/'+raw);path=(archive/raw).resolve()
@@ -81,6 +84,9 @@ def restore(source,destination):
             for dbpath in stage.rglob('*.sqlite'):
                 with contextlib.closing(sqlite3.connect(dbpath)) as db:
                     if db.execute('PRAGMA quick_check').fetchone()[0]!='ok':raise ValueError('Restored database failed integrity check')
+        if (stage/'state/cases/cases.sqlite').exists():
+            from cases import CaseStore
+            CaseStore(stage/'state/cases').verify()
         stage.rename(destination)
     return {'restored_to':str(destination),'files':len(manifest['files'])}
 

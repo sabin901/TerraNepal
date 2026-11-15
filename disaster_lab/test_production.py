@@ -79,6 +79,38 @@ class ProductionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             with self.assertRaises(FileNotFoundError):create_app(state=t,origin=self.base)
 
+    def test_case_and_exposure_endpoints_require_session_and_csrf(self):
+        for route in ('cases','case-integrity','exposure'):
+            self.assertEqual(self.client.get('/api/'+route,base_url=self.base).status_code,401)
+        self.login()
+        self.assertEqual(self.client.post('/api/cases',base_url=self.base,json={}).status_code,403)
+        self.assertEqual(self.client.get('/workspace.html',base_url=self.base).status_code,200)
+
+    def test_case_revision_action_replay_and_integrity_through_api(self):
+        from test_cases import doc,entry,BASE
+        from cases import epoch
+        self.app.extensions['cases'].clock=lambda:epoch(BASE)+60
+        self.login();token=self.client.get('/api/session',base_url=self.base).json['token']
+        headers={'X-Lab-Token':token}
+        r=self.client.post('/api/cases',base_url=self.base,headers=headers,json={'case_id':'synthetic-api-test','document':doc()})
+        self.assertEqual(r.status_code,201)
+        action=self.client.post('/api/case-actions',base_url=self.base,headers=headers,json={'case_id':'synthetic-api-test','document':entry(r.json)})
+        self.assertEqual(action.status_code,201)
+        self.assertEqual(len(self.client.get('/api/cases',base_url=self.base).json),1)
+        # Use an encoded query for the timezone's plus sign.
+        before=self.client.get('/api/cases',query_string={'id':'synthetic-api-test','cutoff':BASE},base_url=self.base).json
+        self.assertEqual(before['events'],[])
+        self.assertEqual(self.client.get('/api/case-integrity',base_url=self.base).json['events'],2)
+
+    def test_exposure_preserves_scenario_semantics_through_api(self):
+        from test_exposure import hazards,assets,AT
+        self.login();token=self.client.get('/api/session',base_url=self.base).json['token']
+        r=self.client.post('/api/exposure',base_url=self.base,headers={'X-Lab-Token':token},json={'hazards':hazards(),'assets':assets(),'at':AT})
+        self.assertEqual(r.status_code,200)
+        self.assertEqual(r.json['assets'][0]['matches'][0]['kind'],'scenario')
+        self.assertEqual(r.json['assets'][0]['damage_assessment'],'not_established')
+        self.assertEqual(self.client.get('/cases/cases.sqlite',base_url=self.base).status_code,404)
+
 class OperationsTests(unittest.TestCase):
     def setUp(self):self.tmp=tempfile.TemporaryDirectory();self.ops=Operations(self.tmp.name)
     def tearDown(self):self.tmp.cleanup()
@@ -159,6 +191,20 @@ class SnapshotTests(unittest.TestCase):
         d.incidents=[{'incident_id':'1','local_event_date':None,'hazard':'Flood','districts':[]}]
         self.assertEqual(d.incident_query('Flood')['total'],1);self.assertEqual(d.incident_query('Flood',year='2024')['total'],0)
 
+class SnapshotStartupTests(unittest.TestCase):
+    def test_initial_load_is_background_and_does_not_block_workspace(self):
+        import threading
+        from snapshots import SnapshotCache
+        entered=threading.Event();release=threading.Event()
+        cache=SnapshotCache('/unused-test-root')
+        def load():entered.set();release.wait(2)
+        cache.refresh=load
+        try:
+            cache.start(initial=True)
+            self.assertTrue(entered.wait(1))
+            self.assertIsNone(cache.current)
+        finally:cache.stop.set();release.set()
+
 class BackupTests(unittest.TestCase):
     def test_roundtrip_is_checked_and_does_not_overwrite(self):
         with tempfile.TemporaryDirectory() as t:
@@ -167,9 +213,16 @@ class BackupTests(unittest.TestCase):
             with contextlib.closing(sqlite3.connect(archive/'data/archive.sqlite')) as db,db:
                 db.execute('CREATE TABLE fetches(raw_path TEXT)');db.execute('INSERT INTO fetches VALUES(?)',('data/raw/original.gz',))
             ForecastStore(state)
+            from cases import CaseStore,epoch
+            from test_cases import doc,BASE
+            cases=CaseStore(state/'cases',clock=lambda:epoch(BASE)+60)
+            saved=cases.append_revision('backup-case',doc())
             report=create(archive,state,root/'backup.zip');self.assertGreater(report['files'],1)
             restore(root/'backup.zip',root/'restored')
             self.assertEqual((root/'restored/archive/data/raw/original.gz').read_bytes(),raw.read_bytes())
+            recovered=CaseStore(root/'restored/state/cases')
+            self.assertEqual(recovered.verify()['events'],1)
+            self.assertEqual(recovered.list_cases()[0]['latest_revision_sha256'],saved['sha256'])
             with self.assertRaises(ValueError):restore(root/'backup.zip',root/'restored')
     def test_tampered_backup_is_rejected_without_publishing_partial_restore(self):
         with tempfile.TemporaryDirectory() as t:

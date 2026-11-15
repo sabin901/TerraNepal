@@ -1,5 +1,8 @@
 **
 !requirements.txt
+!public_site
+public_site/**
+!public_site/*.py
 !disaster_lab
 !disaster_archive
 !planning

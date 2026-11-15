@@ -1,0 +1,2 @@
+# Optional direct-GFS research decoder. Not required for the public Pages service.
+eccodes==2.50.1

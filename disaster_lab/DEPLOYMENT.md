@@ -62,3 +62,43 @@ The archive's source distinctions, raw checksums and revision history remain int
 Further warning-system readiness requires confirmed station units/datums/thresholds, independent multi-season and event validation, catchment and exposure data, local agency review and an agreed warning authority. No earthquake timing prediction or universal disaster prediction is supported.
 
 Implementation references: [Flask production deployment](https://flask.palletsprojects.com/en/stable/tutorial/deploy/), [Flask web security](https://flask.palletsprojects.com/en/stable/web-security/), [Waitress proxy handling](https://docs.pylonsproject.org/projects/waitress/en/latest/reverse-proxy.html), [Caddy HTTPS reverse proxy](https://caddyserver.com/docs/quick-starts/reverse-proxy).
+
+## Case and exposure workspace
+
+The authenticated application serves `/workspace.html`. It uses existing session,
+trusted-host, CSRF, origin and request-size protections. The loopback-only local
+mode serves the same workspace without a remote login. Source and operational
+records remain local/private; GitHub Pages does not expose this application or its
+write APIs.
+
+Start locally with `python disaster_lab/production.py --local --port 8782`, then
+open `http://127.0.0.1:8782/workspace.html`. Initial archive loading is asynchronous;
+case/exposure tools are usable while archive-dependent endpoints remain not ready.
+
+New API routes:
+
+- `GET /api/cases`: list cases; optional cutoff.
+- `GET /api/cases?id=<id>&cutoff=<ISO>`: dated revision/action/outcome replay.
+- `GET /api/case-integrity`: verify stored hash chains, not source authenticity.
+- `POST /api/cases`, `/api/case-actions`, `/api/case-outcomes`: body
+  `{case_id, document}` using CASES.md contracts.
+- `POST /api/exposure`: body `{hazards, assets, at, valid_at?}` using EXPOSURE.md.
+
+The web request limit remains16KB. Use the bounded local CLI for larger supported
+GeoJSON inputs. Downloaded exposure reports preserve input hashes but do not embed
+original input files; retain those files separately. Cases retain source references,
+not arbitrary remote downloads. No private narratives are published automatically.
+
+`backup.py` now includes `state/cases/cases.sqlite` using consistent SQLite snapshots
+and verifies the case hash chains during creation/restoration. Credentials remain
+excluded. Backup integrity does not establish source truth or scientific approval.
+
+To create private weather-review cases from a saved public snapshot:
+
+```sh
+python disaster_lab/case_import.py runtime/saved-snapshot.json \
+  --state disaster_lab/local/cases
+```
+
+These records are explicitly weather evidence reviews, never invented incidents.
+Review all source ages and geography before using them in a decision.

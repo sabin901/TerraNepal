@@ -37,6 +37,7 @@ sys.path[:0]=['/app/disaster_lab','/app/disaster_archive']
 from werkzeug.security import generate_password_hash
 from archive import Archive
 from operations import Operations
+from case_import import import_weather
 assert os.getuid()==10001
 assert not Path('/app/disaster_lab/local').exists()
 assert not Path('/app/disaster_archive/data').exists()
@@ -72,11 +73,15 @@ print('Nonroot fixture initialized; no private data embedded in image')
             assert request('/health/live')[0]==200
             assert request('/health/ready')[0]==200
             assert request('/api/actions')[0]==401
+            assert request('/api/cases')[0]==401
             status,html,headers=request('/login');assert status==200
             token=re.search(r'name="token" value="([^"]+)',html).group(1)
             body=urllib.parse.urlencode({'token':token,'password':password}).encode()
             with opener.open(urllib.request.Request(base+'/login',data=body,headers={'Origin':base}),timeout=15) as response:assert response.status==200
             token=json.loads(request('/api/session')[1])['token']
+            assert request('/workspace.html')[0]==200
+            assert request('/api/cases')[0]==200
+            assert request('/api/case-integrity')[0]==200
             assert request('/api/actions',{'title':'Isolated container test','kind':'research','status':'open'},token)[0]==201
             results.extend(['nonroot image contains no private archive or state','HTTPS through Caddy with explicitly trusted local CA','anonymous API blocked; owner login and CSRF-protected write succeed'])
             docker('restart',web)
