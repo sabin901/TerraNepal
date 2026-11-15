@@ -25,7 +25,7 @@ def git(*args, input=None, env=None):
     return result.stdout
 
 def allowed(name):
-    return name in ('latest.json','state.json','manifest.json') or bool(re.fullmatch(r'history/\d{4}-\d{2}-\d{2}/[0-9a-f]{64}\.json\.gz',name))
+    return name in ('latest.json','state.json','manifest.json','weather-evidence-state.json') or bool(re.fullmatch(r'(?:history|evidence/weather)/\d{4}-\d{2}-\d{2}/[0-9a-f]{64}\.json\.gz',name))
 
 def tree(ref):
     result={}
@@ -38,7 +38,14 @@ def tree(ref):
 
 def verify_file(name,raw):
     if not allowed(name) or len(raw)>MAX_FILE:raise ValueError('Unexpected public data file')
-    if name.startswith('history/'):
+    if name.startswith('evidence/weather/'):
+        import io
+        with gzip.GzipFile(fileobj=io.BytesIO(raw)) as stream:decoded=stream.read(MAX_FILE+1)
+        if len(decoded)>MAX_FILE or hashlib.sha256(decoded).hexdigest()!=Path(name).name.split('.')[0]:raise ValueError('Weather evidence hash mismatch')
+        obj=json.loads(decoded)
+        from weather_evidence import validate
+        validate(obj)
+    elif name.startswith('history/'):
         # Bound decompression before decoding untrusted restored objects.
         import io
         with gzip.GzipFile(fileobj=io.BytesIO(raw)) as stream:decoded=stream.read(MAX_FILE+1)
@@ -73,6 +80,9 @@ def verify_file(name,raw):
         if name=='latest.json':
             from pipeline import validate
             validate(obj)
+        if name=='weather-evidence-state.json':
+            from weather_evidence import validate_state
+            validate_state(obj)
         if name=='state.json':
             from history import validate_state
             validate_state(obj)
@@ -92,10 +102,13 @@ def restore(root):
         if required not in entries:raise ValueError('Incomplete durable data branch: '+required)
     manifest=verify_file('manifest.json',git('show',parent+':manifest.json'))
     files={}
-    for name in ('latest.json','state.json'):
+    for name in ('latest.json','state.json')+ (('weather-evidence-state.json',) if 'weather-evidence-state.json' in entries else ()):
         raw=git('show',parent+':'+name);verify_file(name,raw)
         if hashlib.sha256(raw).hexdigest()!=manifest['sha256'][name]:raise ValueError('State manifest hash mismatch')
         files[name]=raw
+    if 'weather-evidence-state.json' in files:
+        evidence=json.loads(files['weather-evidence-state.json'])
+        if any(r['evidence_path'] not in entries for r in evidence['runs'].values()):raise ValueError('Weather evidence receipt references missing blob')
     for name,raw in files.items():(root/name).write_bytes(raw)
     (root/'.parent').write_text(parent)
     from history import load_state
@@ -108,16 +121,23 @@ def save(root):
     parent=(root/'.parent').read_text().strip()
     prior=tree(parent) if parent else {}
     files={name:(root/name).read_bytes() for name in ('latest.json','state.json')}
-    for path in sorted((root/'history').rglob('*.json.gz')):
+    if (root/'weather-evidence-state.json').exists():files['weather-evidence-state.json']=(root/'weather-evidence-state.json').read_bytes()
+    for path in sorted(list((root/'history').rglob('*.json.gz'))+list((root/'evidence'/'weather').rglob('*.json.gz'))):
         name=path.relative_to(root).as_posix();raw=path.read_bytes();verify_file(name,raw)
         if name in prior:
             if git('hash-object','--stdin',input=raw).decode().strip()!=prior[name][0]:raise ValueError('Refusing history overwrite')
         else:files[name]=raw
     for name,raw in files.items():verify_file(name,raw)
-    manifest={'schema_version':1,'sha256':{n:hashlib.sha256(files[n]).hexdigest() for n in ('latest.json','state.json')},
+    if 'weather-evidence-state.json' in files:
+        evidence=json.loads(files['weather-evidence-state.json'])
+        if any(r['evidence_path'] not in set(prior)|set(files) for r in evidence['runs'].values()):raise ValueError('Weather evidence receipt references missing blob')
+    manifest={'schema_version':1,'sha256':{n:hashlib.sha256(files[n]).hexdigest() for n in files if n in ('latest.json','state.json','weather-evidence-state.json')},
               'history_files':sum(n.startswith('history/') for n in set(prior)|set(files))}
+    manifest['weather_evidence_files']=sum(n.startswith('evidence/weather/') for n in set(prior)|set(files))
     files['manifest.json']=(json.dumps(manifest,sort_keys=True)+'\n').encode()
     total=sum(size for name,(_,size) in prior.items() if name not in files)+sum(map(len,files.values()))
+    storage={'current_tree_bytes':total,'budget_bytes':MAX_BYTES,'fraction_used':total/MAX_BYTES,'new_or_replaced_bytes':sum(map(len,files.values())),'note':'Current tree only; Git object history adds storage. No automatic deletion. Export/rotation required before budget exhaustion.'}
+    (root/'storage-report.json').write_text(json.dumps(storage,indent=2)+'\n')
     if total>MAX_BYTES:raise ValueError('Public history storage budget exceeded; no history deleted and no push attempted')
     with tempfile.TemporaryDirectory() as temp:
         env={**os.environ,'GIT_INDEX_FILE':str(Path(temp)/'index'),

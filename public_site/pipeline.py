@@ -24,6 +24,7 @@ from weather import ForecastStore, PLACES, MODELS, normalize
 
 SEED = Path(__file__).with_name('snapshot.json')
 PUBLIC_URL = 'https://sabin901.github.io/TerraNepal/data/snapshot.json'
+CLOCK_SKEW_SECONDS = 300
 ASSETS = ('index.html', 'app.js', 'style.css', 'logic.js', 'favicon.svg')
 ROOT_KEYS = {'schema_version','built_at','archive','rivers','rain_stations','weather','updates','limitations'}
 V2_KEYS = ROOT_KEYS | {'earthquakes','discharge','pipeline'}
@@ -94,13 +95,19 @@ def validate(s):
     json.dumps(s,allow_nan=False)
     return s
 
-def station_rows(db, at=None):
+def station_rows(db, at=None, quarantine=None):
     at=time.time() if at is None else at
     groups={}
+    def future_row(source, row, stamp):
+        if stamp is None or stamp <= at + CLOCK_SKEW_SECONDS:return False
+        if quarantine is not None:
+            quarantine.append({'source':source,'station_id':str(row['station_id'] if source=='river' else row['id']),
+                               'observed_at':row['observed_at'],'reason':'observation exceeds clock-skew allowance'})
+        return True
     # Window queries bound CI input size; the local seed query covers all archived stations.
     for r in db.execute('SELECT * FROM river_observations'):
         t=timestamp(r['observed_at'])
-        if r['station_id'] is None or t is None or t>at+300:continue
+        if r['station_id'] is None or t is None or future_row('river',r,t):continue
         sid=str(r['station_id']);prev=groups.get(sid)
         row={'id':sid,'name':r['station_name'],'basin':r['basin'],'observed_at':r['observed_at'],
              'level':r['water_level_source_units'] if number(r['water_level_source_units']) else None,
@@ -110,7 +117,7 @@ def station_rows(db, at=None):
     rain={}
     for r in db.execute("SELECT json_extract(payload,'$.station') id,json_extract(payload,'$.title') name,json_extract(payload,'$.measuredOn') observed_at FROM current_payloads WHERE collection='bipad:rain'"):
         t=timestamp(r['observed_at'])
-        if r['id'] is None or t is None or t>at+300:continue
+        if r['id'] is None or t is None or future_row('rain',r,t):continue
         sid=str(r['id'])
         if sid not in rain or t>timestamp(rain[sid]['observed_at']):rain[sid]={'id':sid,'name':r['name'],'observed_at':r['observed_at']}
     return sorted(groups.values(),key=lambda s:s['id']),sorted(rain.values(),key=lambda s:s['id'])
@@ -177,7 +184,11 @@ def refresh(output, state_root=None):
     return collect(output,Path(state_root) if state_root else ROOT/'runtime/public-state')
 
 def build(snapshot,output):
-    s=validate(json.loads(Path(snapshot).read_text()));out=Path(output)
+    s=json.loads(Path(snapshot).read_text());out=Path(output)
+    from health import report as health_report
+    availability=health_report(s)
+    if availability['status']=='invalid':
+        raise ValueError('Invalid publication health: '+'; '.join(availability['errors']))
     if out.exists() and any(out.iterdir()):raise ValueError('Build destination must be empty')
     out.mkdir(parents=True,exist_ok=True)
     for name in ASSETS:shutil.copyfile(Path(__file__).with_name('static')/name,out/name)

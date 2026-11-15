@@ -146,3 +146,51 @@ Primary documentation checked 4 November 2026:
 - [Google Flood Forecasting API and historical datasets](https://developers.google.com/flood-forecasting)
 - [GitHub schedule behavior](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)
 - [GitHub repository storage guidance](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github)
+
+## Invalid-data policy and correction review
+
+Publication uses the shared five-minute (300-second) clock-skew tolerance.
+River/rain observations beyond it are quarantined from the public station view;
+`health-report.json` lists their station IDs, source times and reasons. Original
+timestamps within tolerance remain unchanged, with explicit negative age/skew
+in health diagnostics. The last valid station reading remains visible when a
+new row is quarantined. This tolerance is an operational policy, not a claim
+that a future-dated measurement is scientifically valid.
+
+An invalid final health report is persisted for diagnosis and blocks new public
+state/history/artifact creation. Degraded data availability is still published
+with original source dates. The standalone artifact builder applies the same
+health gate, including to a manually supplied snapshot.
+
+Different levels at the same station timestamp remain an unresolved conflict,
+including when one value is returned repeatedly. Repetition alone does not prove
+a correction is authoritative. There is currently no reviewed correction-approval
+registry, so the collector does not auto-resolve these conflicts. A genuinely
+newer nonconflicting reading can supersede the older display. A future correction
+review mechanism must retain both versions, reviewer evidence and provenance.
+
+## Weather evidence retention and recovery
+
+The workflow retains credential-free Open-Meteo weather bodies in content-addressed
+gzip envelopes under `evidence/weather/` on `codex/data-snapshots`. Each envelope
+contains the exact response bytes, their checksum, request identity, retrieval time,
+attribution and status. Error responses are retained, not converted into weather.
+Receipts cannot reference missing evidence blobs during Git save/restore.
+
+An always-run rolling preservation step and a 90-day Actions artifact cover failed
+refresh/save attempts. That artifact is a temporary recovery window, not permanent
+retention. BIPAD raw records are not included. The independent original-run research
+step has three concurrent requests, a six-minute budget, and cannot prevent otherwise
+valid public output merely because research acquisition fails. Missing runs remain gaps.
+
+`storage-report.json` reports current-tree usage against 256MiB after each save attempt.
+Git object history is additional. Before capacity is reached, export the data branch
+with `git bundle create terranepal-data.bundle refs/remotes/origin/codex/data-snapshots`,
+verify the bundle with `git bundle verify`, and rehearse a clone/replay in an isolated
+directory. No automatic deletion, force push or untested rotation is performed.
+An operator must choose and verify an archive destination before changing retention.
+
+On collection failure: inspect job diagnostics and weather recovery artifact; keep
+the last valid published snapshot dated; fix the failing source/contract and rerun.
+Do not reset durable state, invent new timestamps, or turn missing values into zero.
+The GitHub-only scheduler remains best effort; visible age is not independent alerting.

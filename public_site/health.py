@@ -9,6 +9,8 @@ import sys
 
 import pipeline
 
+CLOCK_SKEW_SECONDS = pipeline.CLOCK_SKEW_SECONDS
+
 def epoch(value):
     if not isinstance(value, str):
         raise ValueError('Expected timezone-aware timestamp')
@@ -19,9 +21,10 @@ def epoch(value):
 
 def freshness(value, at, limit):
     age = at - epoch(value)
-    if age < 0:
+    if age < -CLOCK_SKEW_SECONDS:
         raise ValueError('Future observation, retrieval or publication timestamp')
-    return {'age_seconds': age, 'recent': age <= limit}
+    return {'age_seconds': age, 'recent': age <= limit,
+            'clock_skew_seconds': max(0, -age)}
 
 def report(snapshot, at=None, publication_limit=7200, hours=24):
     """Health is data availability, never a disaster/sensor accuracy assessment."""
@@ -35,6 +38,7 @@ def report(snapshot, at=None, publication_limit=7200, hours=24):
         if not math.isfinite(publication_limit) or publication_limit <= 0:
             raise ValueError('Publication limit must be positive and finite')
         pipeline.validate(snapshot)
+        result['clock_skew_tolerance_seconds'] = CLOCK_SKEW_SECONDS
         result['checked_at'] = dt.datetime.fromtimestamp(at, dt.timezone.utc).isoformat()
         result['publication'] = freshness(snapshot['built_at'], at, publication_limit)
         result['publication']['limit_seconds'] = publication_limit

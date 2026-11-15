@@ -1,4 +1,8 @@
 import copy
+from contextlib import closing
+import datetime as dt
+import sqlite3
+import time
 import json
 from pathlib import Path
 import tempfile
@@ -42,6 +46,39 @@ class PublicSnapshotTests(unittest.TestCase):
             files={str(f.relative_to(d)) for f in Path(d).rglob('*') if f.is_file()}
             self.assertEqual(files,set(p.ASSETS)|{'data/snapshot.json','.nojekyll'})
             with self.assertRaises(ValueError):p.build(p.SEED,d)
+    def test_build_rejects_future_health_but_allows_stale_partial_seed(self):
+        s=copy.deepcopy(self.seed)
+        s['rivers'][0]['observed_at']=dt.datetime.fromtimestamp(time.time()+3600,dt.timezone.utc).isoformat()
+        with tempfile.TemporaryDirectory() as d:
+            source=Path(d)/'snapshot.json';source.write_text(json.dumps(s));out=Path(d)/'site'
+            with self.assertRaisesRegex(ValueError,'Invalid publication health'):p.build(source,out)
+            self.assertFalse(out.exists())
+            p.build(p.SEED,out)
+            self.assertTrue((out/'data/snapshot.json').exists())
+
+    def test_future_station_rows_quarantined_at_shared_boundary(self):
+        with closing(sqlite3.connect(':memory:')) as db:
+            db.row_factory=sqlite3.Row
+            db.execute('CREATE TABLE river_observations(station_id, station_name, basin, observed_at, water_level_source_units, latitude, longitude)')
+            db.execute('CREATE TABLE current_payloads(collection,payload)')
+            at=1800000000
+            for i,offset in enumerate((300,301)):
+                stamp=dt.datetime.fromtimestamp(at+offset,dt.timezone.utc).isoformat()
+                db.execute('INSERT INTO river_observations VALUES(?,?,?,?,?,?,?)',(i,'station','basin',stamp,0,28,85))
+                db.execute('INSERT INTO current_payloads VALUES(?,?)',('bipad:rain',json.dumps(dict(station=i,title='station',measuredOn=stamp))))
+            quarantine=[];rivers,rain=p.station_rows(db,at,quarantine)
+            self.assertEqual([r['id'] for r in rivers],['0']);self.assertEqual([r['id'] for r in rain],['0'])
+            self.assertEqual(rivers[0]['level'],0)
+            self.assertEqual({r['source'] for r in quarantine},{'river','rain'})
+            self.assertTrue(all(r['station_id']=='1' for r in quarantine))
+
+    def test_repeat_same_time_correction_does_not_invent_resolution(self):
+        r=copy.deepcopy(self.seed['rivers'][0]);r['level']=1
+        correction={**r,'level':2}
+        first=p.merge_stations([r],[correction])
+        self.assertEqual(p.merge_stations(first,[correction]),first)
+        self.assertTrue(first[0]['conflicting'])
+
     def test_download_failure_falls_back_to_dated_seed(self):
         with patch.object(p.subprocess,'run',side_effect=OSError('offline')):
             self.assertEqual(p.previous_snapshot()['built_at'],self.seed['built_at'])

@@ -30,14 +30,24 @@ PLACES = [
 MODELS = {'ecmwf_ifs025':'ECMWF IFS 0.25°','gfs_global':'NOAA GFS global'}
 UNITS = {'time':'unixtime','precipitation':'mm','temperature_2m':'°C','wind_gusts_10m':'m/s'}
 
-def normalize(payload, place):
+# Broad quarantine limits, not Nepal climatology or warning thresholds. Do not clamp.
+PLAUSIBILITY_LIMITS = {'temperature_2m':(-100,70), 'precipitation':(0,2000), 'wind_gusts_10m':(0,150)}
+# 0.25-degree grids can select terrain-similar cells rather than nearest cells.
+# This envelope detects gross mismatch only; it does not approve station mapping.
+MODEL_GRID_TOLERANCE_DEGREES = {'ecmwf_ifs025':.5, 'gfs_global':.5}
+
+def normalize(payload, place, model=None):
     if not isinstance(payload,dict) or payload.get('error'): raise ValueError('Provider returned an error or unexpected shape')
     if not isinstance(payload.get('hourly_units'),dict) or not isinstance(payload.get('hourly'),dict):raise ValueError('Unexpected weather units or hourly schema')
     if payload.get('utc_offset_seconds')!=0: raise ValueError('Expected UTC timestamps')
     if any(payload.get('hourly_units',{}).get(k)!=v for k,v in UNITS.items()): raise ValueError('Unexpected forecast units')
     lat,lon=payload.get('latitude'),payload.get('longitude')
-    if not number(lat) or not number(lon) or abs(lat-place['latitude'])>.5 or abs(lon-place['longitude'])>.5:
+    if model is not None and model not in MODEL_GRID_TOLERANCE_DEGREES:raise ValueError('Unsupported model grid policy')
+    tolerance=MODEL_GRID_TOLERANCE_DEGREES.get(model,.5)
+    if not number(lat) or not number(lon) or not -90<=lat<=90 or not -180<=lon<=180 or abs(lat-place['latitude'])>tolerance or abs(lon-place['longitude'])>tolerance:
         raise ValueError('Forecast grid point does not match requested location')
+    elevation=payload.get('elevation')
+    if elevation is not None and (not number(elevation) or not -500<=elevation<=9000):raise ValueError('Invalid forecast target elevation')
     hourly=payload.get('hourly',{});times=hourly.get('time',[])
     if not isinstance(times,list) or not 72<=len(times)<=200: raise ValueError('Expected 72–200 hourly forecast values')
     if any(not number(t) or not 946684800<=t<4102444800 for t in times) or any(b-a!=3600 for a,b in zip(times,times[1:])):
@@ -50,7 +60,7 @@ def normalize(payload, place):
         for k in UNITS:
             if k=='time': continue
             v=hourly[k][i]
-            if v is not None and (not number(v) or (k!='temperature_2m' and v<0)):
+            if v is not None and (not number(v) or not PLAUSIBILITY_LIMITS[k][0]<=v<=PLAUSIBILITY_LIMITS[k][1]):
                 raise ValueError('Invalid numeric forecast value: '+k)
             point[k]=v
         points.append(point)
@@ -111,7 +121,7 @@ class ForecastStore:
                     out.write(r.stdout);temp=Path(out.name)
                 temp.replace(self.raw/rawfile)
             if r.returncode: raise ValueError('Fetch failed: '+r.stderr.decode(errors='replace')[:300])
-            normalized=json.dumps(normalize(json.loads(r.stdout),place),allow_nan=False)
+            normalized=json.dumps(normalize(json.loads(r.stdout),place,model),allow_nan=False)
             status='ok'
         except (ValueError,OSError,subprocess.TimeoutExpired) as e:error=str(e)
         stamp=iso(time.time())

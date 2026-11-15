@@ -38,9 +38,11 @@ def collect_hydrology(a, snapshot, state, stamp):
         job=a.db.execute('SELECT * FROM collection_runs WHERE run_id=? AND collection=? ORDER BY id DESC LIMIT 1',(a.run_id,'bipad:'+feed)).fetchone()
         if status=='traversed':state['watermarks'][feed]=end
         update(snapshot,feed,status,f'{job["rows_seen"]} rows traversed in {start} to {end}; {job["pages"]} pages. {job["note"] or ""} Query success does not establish sensor coverage.',status=='traversed')
-    rivers,rain=p.station_rows(a.db)
+    quarantined=[]
+    rivers,rain=p.station_rows(a.db,quarantine=quarantined)
     snapshot['rivers']=p.merge_stations(snapshot['rivers'],rivers)
     snapshot['rain_stations']=p.merge_stations(snapshot['rain_stations'],rain)
+    return quarantined
 
 def collect_weather(snapshot, runtime, at):
     store=p.ForecastStore(runtime/'weather')
@@ -92,7 +94,7 @@ def quality(snapshot, at):
     warnings=[]
     q={}
     for source,field in [('river','rivers'),('rain','rain_stations')]:
-        rows=snapshot[field];recent=sum(p.timestamp(r['observed_at']) is not None and 0<=at-p.timestamp(r['observed_at'])<=7200 for r in rows)
+        rows=snapshot[field];recent=sum(p.timestamp(r['observed_at']) is not None and -p.CLOCK_SKEW_SECONDS<=at-p.timestamp(r['observed_at'])<=7200 for r in rows)
         q[source+'_recent']=recent;q[source+'_total']=len(rows)
         if not rows:warnings.append(source+': no retained station observations are available.')
         elif recent<len(rows)*.5:warnings.append(f'{source}: fewer than half of retained stations have an observation within two hours; station operation status is unverified.')
@@ -123,7 +125,7 @@ def _collect(output,state_root):
     stamp=p.now();at=time.time()
     runtime=state_root/'raw-local';a=Archive(runtime/'archive');a.start('scheduled_public_collection')
     try:
-        collect_hydrology(a,snapshot,state,stamp)
+        quarantined=collect_hydrology(a,snapshot,state,stamp) or []
         weather_fetches=collect_weather(snapshot,runtime,at)
         collect_extra(a,snapshot,at)
         changes=history.record_versions(state,history.observation_versions(a.db,a.run_id),stamp)
@@ -132,16 +134,20 @@ def _collect(output,state_root):
         q=quality(snapshot,time.time())
         invalid=sum(bool(c['record'].get('quality_issues')) for c in changes)
         if invalid:q['warnings'].append(f'{invalid} selected observation versions contain invalid fields; those fields are marked missing with quality issues, and source response hashes are retained.')
+        if quarantined:q['warnings'].append(f'{len(quarantined)} future-dated station observations were quarantined; prior readings retained, raw source evidence preserved.')
         if state['gaps']:q['warnings'].append(f'{len(state["gaps"])} catch-up intervals remain unresolved; see recorded coverage gaps.')
         snapshot['built_at']=p.now();snapshot['limitations']=p.LIMITATIONS
         parent=(state_root/'.parent').read_text().strip() if (state_root/'.parent').exists() else ''
         snapshot['pipeline']={'schedule_minutes':30,'history_started_at':state['history_started_at'] or snapshot['built_at'],
             'history_runs':state['runs']+1,'revisions':state['revisions'],'catchup_gaps':state['gaps'],
             'quality':q,'history_branch':'codex/data-snapshots','previous_revision':parent or None}
-        p.validate(snapshot)
         from health import report as health_report
         availability=health_report(snapshot,at=time.time())
+        availability['quarantined_observations']=quarantined
+        if quarantined and availability['status']=='healthy':availability['status']='degraded'
         p.write(state_root/'health-report.json',availability)
+        if availability['status']=='invalid':
+            raise ValueError('Invalid publication health: '+'; '.join(availability['errors']))
         report=history.save_run(state_root,state,snapshot,changes,fetches)
         p.write(output,snapshot)
         a.db.execute('UPDATE runs SET status=?,finished_at=? WHERE id=?',('partial' if q['warnings'] else 'completed',p.now(),a.run_id));a.db.commit()

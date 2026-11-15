@@ -15,22 +15,22 @@
     const lookup=new Map(source.normalized.points.map(p=>[p.epoch,p]));
     result.points=Array.from({length:hours},(_,i)=>lookup.get(start+(i+1)*3600)||null);
     result.valid=result.points.filter(p=>p&&finite(p.precipitation)).length;
-    result.state=!Number.isFinite(age)?'unknown':age<0?'future retrieval':age>6?'stale':result.valid===hours?'recent':'incomplete';
+    result.state=!Number.isFinite(age)?'unknown':age< -5/60?'future retrieval':age>6?'stale':result.valid===hours?'recent':'incomplete';
     if(result.state==='recent')result.total=result.points.reduce((sum,p)=>sum+p.precipitation,0);
-    if(age>=0&&age<=6&&result.points.every(p=>p&&finite(p.wind_gusts_10m)))result.gust=Math.max(...result.points.map(p=>p.wind_gusts_10m));
+    if(age>= -5/60&&age<=6&&result.points.every(p=>p&&finite(p.wind_gusts_10m)))result.gust=Math.max(...result.points.map(p=>p.wind_gusts_10m));
     return result;
   }
   function dischargeState(source,at=Date.now()/1000){
     if(!source)return 'unavailable';
     if(source.normalized?.reach_verified!==true)return 'mapping unverified';
     const age=(at-epoch(source.fetched_at))/3600;
-    return !Number.isFinite(age)||age<0||age>24?'stale / unavailable':'experimental model output';
+    return !Number.isFinite(age)||age< -5/60||age>24?'stale / unavailable':'experimental model output';
   }
   function weatherAvailability(sources,at=Date.now()/1000){
     const result={stored:sources.length,recent:0,usable:0,latestFailed:0};
     for(const source of sources){
       const age=(at-epoch(source.fetched_at))/3600;
-      if(Number.isFinite(age)&&age>=0&&age<=6)result.recent++;
+      if(Number.isFinite(age)&&age>= -5/60&&age<=6)result.recent++;
       const summary=windowSummary(source,24,at);
       if(summary.state==='recent'&&summary.points.every(p=>p&&finite(p.temperature_2m)&&finite(p.wind_gusts_10m)))result.usable++;
       if(source.latest_attempt?.status==='error')result.latestFailed++;

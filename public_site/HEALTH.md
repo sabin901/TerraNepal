@@ -33,8 +33,11 @@ Complete windows follow the public display: whole future hourly intervals,
 precipitation labeled by the interval end; missing values remain missing.
 Fourteen pairs are expected. No provider issuance time is invented.
 
-Any invalid schema or future publication/observation/retrieval/attempt timestamp
-makes the entire report invalid. Future forecast valid times are expected.
+The shared clock-skew allowance is 300 seconds for publication, observation,
+retrieval and attempt timestamps. A timestamp more than 300 seconds ahead
+makes the report invalid. Within the allowance, the original negative age is
+retained and `clock_skew_seconds` reports it explicitly; no timestamp is rewritten.
+Invalid schema also makes the report invalid. Future forecast valid times are expected.
 Missing products, zero recent observations for a product, missing usable weather
 pairs, stale publication or a failed/partial latest update cause degradation.
 Individual stale stations remain visible in counts; they do not alone make all
@@ -46,3 +49,17 @@ Historical archive dating is reported separately, excluded from the live gate.
 Health is neither national completeness nor scientific validation. A green check
 does not mean safe weather, calibrated forecasts or verified sensors. This CLI
 does not issue warnings or messages to users.
+
+## Publication enforcement
+
+The collector writes `health-report.json` before its publication decision. An
+invalid result stops the run before writing the new public snapshot, durable
+latest/state files or selected-history batch. The previous published artifact
+remains available with its original dates. The standalone build also rejects
+invalid health. Degraded availability (including missing products, stale data
+and failed source requests) does not block honest partial publication.
+
+New river/rain rows beyond the clock-skew allowance are excluded from the display
+and listed in the health report's `quarantined_observations`, with station ID,
+source, timestamp and reason. Previous valid readings remain. Source evidence is
+retained by the raw-response retention path; quarantine does not modify it.

@@ -16,8 +16,14 @@ const base=process.env.TERRA_TEST_URL||'http://127.0.0.1:8768/TerraNepal/';
   await page.locator('#search').fill('');await page.locator('#state').selectOption('stale');
   assert.ok(await page.locator('#station-rows tr').count()>0);
   await page.getByRole('link',{name:'Weather outlook',exact:true}).click();
-  await page.getByRole('button',{name:'Pokhara',exact:true}).click();
-  await page.getByRole('button',{name:'Next 72 hours'}).click();
+  await page.getByRole('button',{name:'Pokhara',exact:true}).press('Enter');
+  assert.equal(await page.evaluate(()=>document.activeElement.id),'place-pokhara','Location selection preserves keyboard focus');
+  await page.getByRole('button',{name:'Next 72 hours'}).press('Enter');
+  assert.equal(await page.evaluate(()=>document.activeElement.id),'hours-72','Duration selection preserves keyboard focus');
+  await page.getByRole('button',{name:'Next 24 hours'}).press('Enter');
+  await page.getByText('Read hourly precipitation data',{exact:true}).first().click();
+  assert.equal(await page.locator('.weather-grid table tbody tr').first().count(),1);
+  assert.ok(await page.locator('.weather-grid table tbody tr').count()>=24);
   await page.getByRole('link',{name:'Evidence',exact:true}).click();await page.getByRole('heading',{name:'Known historical coverage gaps'}).waitFor();
   await page.setViewportSize({width:390,height:844});
   for(const hash of ['overview','rivers','weather','evidence']){
@@ -66,6 +72,26 @@ const base=process.env.TERRA_TEST_URL||'http://127.0.0.1:8768/TerraNepal/';
    await page.goto(base+'#evidence');await page.getByRole('heading',{name:'Automatic collection & retained history'}).waitFor();
    await page.getByRole('heading',{name:'Regional earthquake catalog'}).waitFor();
   }
-  console.log('PASS: four views, search, filters, model tabs, repository path, mobile overflow, stale snapshots, automatic refresh/filter retention, offline fallback and no browser errors');
+  // Initial mobile failure must retain an actual official destination, without a snapshot.
+  const outage=await browser.newPage({viewport:{width:390,height:844}});
+  await outage.route('**/data/snapshot.json',route=>route.abort());
+  await outage.goto(base);await outage.getByRole('alert').waitFor();
+  assert.ok(await outage.getByRole('link',{name:'Check official Nepal DHM information'}).isVisible());
+  assert.ok(await outage.getByRole('link',{name:'Official DHM ↗',exact:true}).isVisible());
+  // Expiry cannot be suspended by focus inside the weather view or an open disclosure.
+  const expiry=await browser.newPage();const fixed=new Date('2026-11-15T00:00:00Z');
+  await expiry.clock.install({time:fixed});
+  const expiryFixture=structuredClone(fixture);expiryFixture.built_at=fixed.toISOString();
+  expiryFixture.weather=expiryFixture.weather.map(source=>({...source,fetched_at:fixed.toISOString(),normalized:{...source.normalized,points:Array.from({length:96},(_,i)=>{const epoch=fixed.getTime()/1000+(i+1)*3600;return {epoch,at:new Date(epoch*1000).toISOString(),precipitation:1,temperature_2m:15,wind_gusts_10m:2}})}}));
+  await expiry.route('**/data/snapshot.json',route=>route.fulfill({contentType:'application/json',body:JSON.stringify(expiryFixture)}));
+  await expiry.goto(base+'#weather');await expiry.locator('#place-kathmandu').waitFor();
+  await expiry.locator('#weather-data-ecmwf_ifs025').click();
+  await expiry.locator('#hours-24').press('Enter');
+  assert.equal(await expiry.getByText('Forecast precipitation over the selected future window.',{exact:true}).count(),2);
+  await expiry.clock.runFor(6*3600000+60001);
+  assert.equal(await expiry.getByText('Summary withheld: stale, missing or incomplete forecast.',{exact:true}).count(),2);
+  assert.equal(await expiry.evaluate(()=>document.activeElement.id),'hours-24');
+  assert.ok(await expiry.locator('#weather-data-ecmwf_ifs025').evaluate(el=>el.parentElement.open));
+  console.log('PASS: four views, search, filters, model tabs, repository path, mobile overflow, stale snapshots, automatic refresh/filter retention, offline fallback, mobile official links, keyboard focus, accessible chart tables, focused forecast expiry and no browser errors');
  }finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exit(1)});

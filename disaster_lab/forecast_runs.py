@@ -38,15 +38,17 @@ def request_url(place_id, model, run, at):
         'forecast_days':4, 'timeformat':'unixtime', 'timezone':'GMT',
         'wind_speed_unit':'ms', 'precipitation_unit':'mm'}), place, initialized
 
-def normalize_run(payload, place, initialized):
-    data = normalize(payload, place)
+def normalize_run(payload, place, initialized, model=None):
+    data = normalize(payload, place, model)
     points = data['points']
     if points[0]['epoch'] < initialized.timestamp():
         raise ValueError('Single-run response contains pre-initialization values')
     if points[0]['epoch'] > initialized.timestamp() + 3600:
         raise ValueError('Single-run response does not start near requested initialization')
     # This timestamp comes from the documented request contract, not an echoed field.
-    data['model_issued_at'] = initialized.isoformat()
+    data['model_issued_at'] = None  # Deprecated ambiguous field; never publication time.
+    data['initialized_at'] = initialized.isoformat()
+    data['published_at'] = None
     data['time_note'] = 'Initialization selected by Single Runs API request; not independently echoed by response. Retrieval time records actual archive availability.'
     return data
 
@@ -77,7 +79,7 @@ def collect(root, place_id, model, run):
                 if isinstance(body,dict) and isinstance(body.get('reason'),str): reason=body['reason'][:300]
             except (ValueError,UnicodeError): pass
             raise ValueError('Source request failed: '+reason)
-        normalized = normalize_run(json.loads(raw), place, initialized)
+        normalized = normalize_run(json.loads(raw), place, initialized, model)
     except (ValueError, TypeError, KeyError) as exc:
         error = str(exc)
     with contextlib.closing(sqlite3.connect(root/'runs.sqlite')) as db, db:

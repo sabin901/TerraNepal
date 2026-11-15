@@ -48,6 +48,25 @@ jobs:
         run: python public_site/data_branch.py restore
       - name: Refresh public sources
         run: python public_site/pipeline.py refresh --output runtime/public-snapshot.json
+      - name: Preserve rolling weather bytes even after validation failure
+        if: always()
+        run: python public_site/weather_evidence.py --root runtime/public-state --rolling-only
+      - name: Collect initialized research runs
+        id: research
+        continue-on-error: true
+        timeout-minutes: 6
+        run: python public_site/weather_evidence.py --root runtime/public-state
+      - name: Report unavailable research acquisition
+        if: always() && steps.research.outcome == 'failure'
+        run: echo "::warning::Original-run research acquisition failed. No complete research coverage is claimed; validated public source data can still publish."
+      - name: Retain weather evidence recovery artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weather-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runtime/public-state/evidence/weather
+          retention-days: 90
+          if-no-files-found: ignore
       - name: Retain selected history before publication
         id: history
         run: python public_site/data_branch.py save
@@ -61,6 +80,8 @@ jobs:
           path: |
             runtime/public-state/run-report.json
             runtime/public-state/health-report.json
+            runtime/public-state/weather-evidence-report.json
+            runtime/public-state/storage-report.json
           retention-days: 14
           if-no-files-found: ignore
       - uses: actions/upload-pages-artifact@v4

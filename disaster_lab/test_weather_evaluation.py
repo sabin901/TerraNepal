@@ -16,7 +16,7 @@ class WeatherEvaluationTests(unittest.TestCase):
         r=report([a,b]);self.assertEqual(r['matched_cases'],2);self.assertEqual(r['metrics'][0]['mae'],3.);self.assertEqual(r['metrics'][0]['bias'],-1.)
     def test_duplicate_conflicting_truth_excludes_all(self):
         a,b=case(),case();b['observation']['value']=500
-        self.assertEqual(report([a,b])['exclusions'],{'duplicate_forecast_target':2})
+        self.assertEqual(report([a,b])['exclusions'],{'conflicting_observation_truth':2})
     def test_missing_nonfinite_and_boolean_not_zero(self):
         for value in [None,float('nan'),float('inf'),True,'12',10**1000]:
             x=case();x['observation']['value']=value
@@ -47,5 +47,32 @@ class WeatherEvaluationTests(unittest.TestCase):
         self.assertEqual(len(report([a,b])['metrics']),2)
         a['forecast']['variable']='wind_gusts_10m'
         self.assertEqual(report([a])['exclusions'],{'unsupported_variable':1})
+
+    def test_conflicting_truth_across_providers_and_runs_excluded(self):
+        a,b=case(),case();b['forecast']['provider']='other';b['forecast']['issued_at']='2026-10-31T12:00:00Z';b['observation']['value']=30
+        r=report([a,b]);self.assertEqual(r['matched_cases'],0);self.assertEqual(r['exclusions'],{'conflicting_observation_truth':2})
+    def test_identical_duplicate_excluded(self):
+        self.assertEqual(report([case(),case()])['exclusions'],{'duplicate_forecast_target':2})
+    def test_both_leads_and_run_age_reported(self):
+        x=case();x['forecast']['issued_at']='2026-10-25T00:00:00Z';x['forecast']['retrieved_at']='2026-10-25T12:00:00Z'
+        m=report([x])['metrics'][0]
+        self.assertEqual(m['lead_group'],'0-24h');self.assertEqual(m['initialization_lead_hours'],{'min':192.,'max':192.});self.assertEqual(m['run_age_at_origin_hours']['min'],168.)
+        self.assertEqual(m['time_basis_counts'],{'legacy_issued_at_assumed_initialization':1})
+    def test_explicit_initialization_publication_order(self):
+        x=case();x['forecast']['initialized_at']=x['forecast'].pop('issued_at');x['forecast']['published_at']='2026-10-31T18:30:00Z'
+        self.assertEqual(report([x])['metrics'][0]['time_basis_counts'],{'explicit_initialization':1})
+        x['forecast']['issued_at']='2026-10-31T12:00:00Z'
+        self.assertEqual(report([x])['exclusions'],{'ambiguous_legacy_initialization':1})
+        del x['forecast']['issued_at']
+        x['forecast']['published_at']='2026-10-31T17:00:00Z'
+        self.assertEqual(report([x])['exclusions'],{'invalid_publication_order':1})
+    def test_common_cohort_excludes_unmatched_and_ambiguous_runs(self):
+        a,b,c=case(),case(),case();b['forecast']['provider']='other'
+        for section in ('forecast','observation','mapping'):c[section]['station_id']='S2'
+        r=report([a,b,c]);comparison=r['common_case_comparisons'][0]
+        self.assertEqual(comparison['common_cases'],1);self.assertEqual(len(comparison['model_metrics']),2)
+        d=copy.deepcopy(a);d['forecast']['issued_at']='2026-10-31T12:00:00Z'
+        self.assertEqual(report([a,b,c,d])['common_case_comparisons'][0]['common_cases'],0)
+        self.assertEqual(report([c,b,a])['common_case_comparisons'],r['common_case_comparisons'])
 
 if __name__=='__main__':unittest.main()

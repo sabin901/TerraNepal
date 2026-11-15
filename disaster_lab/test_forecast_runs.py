@@ -24,7 +24,9 @@ class OriginalRuns(unittest.TestCase):
     def test_contract_and_no_fabricated_issuance_echo(self):
         initialized=r.run_time('2026-11-15T00:00:00Z')
         x=r.normalize_run(self.payload(),PLACES[0],initialized)
-        self.assertEqual(x['model_issued_at'],initialized.isoformat())
+        self.assertIsNone(x['model_issued_at'])
+        self.assertEqual(x['initialized_at'],initialized.isoformat())
+        self.assertIsNone(x['published_at'])
         self.assertIn('not independently echoed',x['time_note'])
         with self.assertRaises(ValueError):r.normalize_run(self.payload(),PLACES[0],initialized+dt.timedelta(hours=6))
     def test_failed_retry_preserves_prior_success_and_exact_error_body(self):
@@ -39,3 +41,11 @@ class OriginalRuns(unittest.TestCase):
     def test_transport_timeout_is_recorded(self):
         with tempfile.TemporaryDirectory() as tmp,patch.object(r.time,'time',return_value=1800000000),patch.object(r.subprocess,'run',side_effect=subprocess.TimeoutExpired('curl',50)):
             self.assertEqual(r.collect(tmp,'kathmandu','ecmwf_ifs025','2026-11-15T00:00:00Z')['status'],'error')
+
+    def test_quarantined_numeric_response_is_preserved(self):
+        payload=self.payload();payload['hourly']['temperature_2m'][0]=999
+        body=json.dumps(payload).encode()
+        with tempfile.TemporaryDirectory() as tmp,patch.object(r.time,'time',return_value=1800000000),patch.object(r.subprocess,'run',return_value=subprocess.CompletedProcess([],0,body,b'')):
+            result=r.collect(tmp,'kathmandu','ecmwf_ifs025','2026-11-15T00:00:00Z')
+            self.assertEqual(result['status'],'error')
+            self.assertEqual((Path(tmp)/'raw'/(result['sha256']+'.json')).read_bytes(),body)

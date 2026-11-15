@@ -39,7 +39,17 @@ class HealthTests(unittest.TestCase):
         self.assertFalse(r['usable'])
 
     def test_future_publication_invalid(self):
-        self.assertEqual(health.report(self.s, self.at - 1)['status'], 'invalid')
+        self.assertEqual(health.report(self.s, self.at - 301)['status'], 'invalid')
+
+    def test_explicit_clock_skew_boundary_retains_actual_age(self):
+        for offset, invalid in [(0,False),(120,False),(300,False),(301,True)]:
+            with self.subTest(offset=offset):
+                r=health.report(self.s,self.at-offset)
+                self.assertEqual(r['status']=='invalid',invalid)
+                if not invalid:
+                    self.assertEqual(r['publication']['age_seconds'],-offset)
+                    self.assertEqual(r['publication']['clock_skew_seconds'],offset)
+                    self.assertEqual(r['clock_skew_tolerance_seconds'],300)
 
     def test_future_observation_invalid(self):
         self.s['rivers'][0]['observed_at'] = '2099-01-01T00:00:00Z'

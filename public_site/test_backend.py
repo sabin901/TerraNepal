@@ -192,6 +192,30 @@ class HistoryContracts(unittest.TestCase):
             collector.collect_extra(MagicMock(),snapshot,AT)
         self.assertEqual(snapshot['earthquakes'],old);self.assertEqual(snapshot['updates']['earthquakes']['state'],'failed');self.assertEqual(snapshot['discharge'],[])
 
+class PublicationHealthIntegration(unittest.TestCase):
+    def test_invalid_health_keeps_diagnostic_without_advancing_public_state(self):
+        seed=json.loads(p.SEED.read_text());seed['weather'][0]['latest_attempt']=None
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/'state';output=Path(d)/'published.json';output.write_text('previous artifact')
+            with patch.object(p,'previous_snapshot',return_value=seed), patch.object(collector,'collect_hydrology',return_value=[]), patch.object(collector,'collect_weather',return_value=[]), patch.object(collector,'collect_extra'):
+                with self.assertRaisesRegex(ValueError,'Invalid publication health'):
+                    collector.collect(output,root)
+            self.assertEqual(json.loads((root/'health-report.json').read_text())['status'],'invalid')
+            self.assertEqual(output.read_text(),'previous artifact')
+            self.assertFalse((root/'latest.json').exists())
+            self.assertFalse((root/'state.json').exists())
+            self.assertFalse((root/'history').exists())
+
+    def test_degraded_health_still_publishes_dated_partial_data(self):
+        seed=json.loads(p.SEED.read_text())
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/'state';output=Path(d)/'published.json'
+            with patch.object(p,'previous_snapshot',return_value=seed), patch.object(collector,'collect_hydrology',return_value=[]), patch.object(collector,'collect_weather',return_value=[]), patch.object(collector,'collect_extra'):
+                result=collector.collect(output,root)
+            self.assertEqual(result['availability_status'],'degraded')
+            self.assertEqual(json.loads(output.read_text())['weather'][0]['fetched_at'],seed['weather'][0]['fetched_at'])
+            self.assertTrue((root/'latest.json').exists())
+
 class DataBranchIntegration(unittest.TestCase):
     def test_roundtrip_append_only_and_competing_writer(self):
         original=Path.cwd()

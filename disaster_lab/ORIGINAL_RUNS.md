@@ -24,7 +24,12 @@ Downloading an old run now does not prove it was available to users at its
 initialization time. It cannot enter a prospective evaluation before acquisition.
 Historical and prospective results must remain separate.
 
-This is a local research collector, not yet a continuously scheduled archive.
+The standalone collector is now invoked by the GitHub Pages workflow through
+`public_site/weather_evidence.py`. Each executed job requests the latest six-hour
+initialization at least eight hours old, with at most three concurrent requests.
+Successful requests for that initialization are deduplicated using durable receipts;
+failed requests may retry after one hour. Missed initializations are not automatically
+backfilled. This remains best-effort research acquisition, not complete coverage.
 No observations or station mappings are fabricated. Training is blocked until
 compatible, quality-controlled observations and mapping evidence are supplied.
 
@@ -43,3 +48,39 @@ not independent protection against scheduler outages.
 These are observed trigger intervals, not source-observation intervals or proof
 of permanent data loss. Retries cannot recover a workflow that never started.
 Sources: GitHub repository Actions API and default-branch workflow contents.
+
+## Scientific metadata and quarantine policy
+
+New normalized runs use `initialized_at` for the requested model reference time,
+`published_at: null` when actual publication is unknown, and the deprecated
+`model_issued_at: null`. Existing SQLite rows remain immutable; older rows that
+stored initialization in `model_issued_at` must be interpreted using their stored
+`requested_run` and time note, never as proven publication. Retrieval remains a
+separate ledger timestamp. No existing ledger column or collector call changed.
+
+The shared normalizer quarantines nonfinite or out-of-envelope numeric values:
+2 m temperature -100 to 70 degC, hourly precipitation 0 to 2000 mm and gust 0 to
+150 m/s. These deliberately broad local screening limits are neither climate
+ranges nor warning thresholds; flagged responses require investigation and exact
+raw bytes are retained. Nothing is clamped. Missing values stay null. Non-null
+returned target elevation must be numeric and within -500 to 9000 metres.
+
+Both currently supported coarse global model identifiers use an explicit 0.5
+latitude/longitude degree envelope around the requested point. This is a gross
+mismatch check accommodating terrain-based cell selection, not station mapping
+approval; even an accepted displacement can span a different Nepal valley.
+Unknown model policies are rejected when a model is supplied. Legacy normalizer
+callers without a model retain the same coarse envelope. A reviewed station/grid
+register is still required before scientific comparisons. Returned `elevation`
+is provider target/downscaling elevation, not verified native grid height.
+
+## Durable public weather evidence
+
+Exact response bytes (including source errors) are base64 encoded inside attributed,
+content-addressed gzip envelopes on `codex/data-snapshots` under `evidence/weather/`.
+Rolling weather responses are retained even if final snapshot validation fails,
+with a 90-day Actions recovery artifact when durable publication cannot proceed.
+Successful data-branch publication is the durable path; artifacts alone are not
+permanent retention. BIPAD raw records are outside this publication contract.
+The original-run step has a six-minute budget and failure does not block otherwise
+valid public weather publication. Diagnostics must be checked separately.

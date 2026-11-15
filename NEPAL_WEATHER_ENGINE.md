@@ -145,3 +145,11 @@ scoring, calibrated model corrections and sector-specific validation remain outs
 An offline paired evaluator now checks availability, mapping attestations, units,
 periods and duplicate targets before reporting MAE and bias. Its tests are synthetic;
 no real forecast skill has yet been measured by this module.
+
+## Corrective implementation status
+
+See RELEASE_HARDENING_2026-11-15.md for tested audit remediations. Original-run
+acquisition now runs best-effort in GitHub with weather evidence retention; canonical
+truth conflicts, common-case comparison and explicit lead metadata are implemented.
+Station candidate registry generation is reproducible but does not approve mappings.
+No scientific gate is passed merely by deployment or automated unit tests.
