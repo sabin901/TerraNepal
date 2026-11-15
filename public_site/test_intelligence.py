@@ -96,6 +96,20 @@ class IntelligenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'response hash'):
             i.brief(self.s, self.at)
 
+    def test_quarantine_receipt_survives_brief_and_horizon(self):
+        w = self.s['weather'][0]
+        index = next(i for i,p in enumerate(w['normalized']['points']) if p['epoch'] > self.at+3600)
+        point = w['normalized']['points'][index]
+        point['precipitation'] = None
+        receipt = {'variable':'precipitation','index':index,'at':point['at'],'value':-0.1,'reason':'outside_physical_bounds'}
+        w['normalized']['quality'] = [receipt]
+        b = i.brief(self.s, self.at)
+        self.assertEqual(b['weather'][0]['quarantined_samples'], [receipt])
+        self.assertIsNone(b['weather'][0]['values']['precipitation'])
+        self.assertIsNotNone(b['weather'][0]['values']['temperature_2m'])
+        self.assertEqual(b['availability']['products']['weather']['quarantined_samples'],1)
+        self.assertIn('invalid source samples withheld',i.markdown(b))
+
     def test_malformed_evidence_rejected(self):
         self.s['rivers'][0]['level'] = float('nan')
         with self.assertRaises(ValueError): i.brief(self.s, self.at)

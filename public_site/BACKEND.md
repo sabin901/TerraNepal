@@ -222,3 +222,21 @@ must not overwrite input evidence. Future evidence is rejected even inside the
 ordinary health monitor's clock-skew tolerance. This is replay of a saved snapshot,
 not reconstruction of undocumented historical source delivery. The public build
 includes the exact snapshot needed to reproduce the brief.
+
+## Rolling weather quarantine contract
+
+Rolling normalized forecasts optionally contain a nonempty `quality` list. Each
+receipt has `variable`, zero-based `index`, `at`, original finite numeric `value`,
+and `reason: outside_physical_bounds`. Its corresponding normalized point is null.
+Unchanged valid snapshots retain their prior shape. This additive contract remains
+compatible with historical snapshots; older consumers must continue treating null
+as missing, and updated consumers display the explicit reason.
+
+The publication validator verifies receipt identity, bounds, uniqueness and null
+placement, restores original values, and replays normalization. Collection replays
+raw bytes and compares them with stored normalized evidence. A receipt alone is not
+proof of original bytes; hashes refer to the retained immutable evidence archive.
+Weather health remains degraded when any receipts exist even if all next-24-hour
+windows are complete. The UI shows affected samples and independent temperature,
+gust and precipitation availability. Original-run scientific acquisition remains
+strict until a separate evaluation contract accepts quarantined runs.

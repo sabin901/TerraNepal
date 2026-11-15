@@ -9,7 +9,7 @@
   }
   function windowSummary(source,hours=24,at=Date.now()/1000){
     const start=Math.ceil(at/3600)*3600,end=start+hours*3600;
-    const result={state:'unavailable',total:null,gust:null,valid:0,start,end,points:[]};
+    const result={state:'unavailable',total:null,gust:null,temperatureMin:null,temperatureMax:null,valid:0,start,end,points:[]};
     if(!source)return result;
     const age=(at-epoch(source.fetched_at))/3600;
     const lookup=new Map(source.normalized.points.map(p=>[p.epoch,p]));
@@ -18,6 +18,7 @@
     result.state=!Number.isFinite(age)?'unknown':age< -5/60?'future retrieval':age>6?'stale':result.valid===hours?'recent':'incomplete';
     if(result.state==='recent')result.total=result.points.reduce((sum,p)=>sum+p.precipitation,0);
     if(age>= -5/60&&age<=6&&result.points.every(p=>p&&finite(p.wind_gusts_10m)))result.gust=Math.max(...result.points.map(p=>p.wind_gusts_10m));
+    if(age>= -5/60&&age<=6&&result.points.every(p=>p&&finite(p.temperature_2m))){result.temperatureMin=Math.min(...result.points.map(p=>p.temperature_2m));result.temperatureMax=Math.max(...result.points.map(p=>p.temperature_2m));}
     return result;
   }
   function dischargeState(source,at=Date.now()/1000){

@@ -77,6 +77,7 @@ def brief(snapshot, at=None, hours=24):
             'initialization_note': 'Rolling response does not establish model initialization time.',
             'provenance_note': 'Source hash reference from snapshot; this brief does not reverify raw response bytes.',
             'latest_attempt_failed': availability['latest_failed'], 'values': values, 'withheld': reasons,
+            'quarantined_samples': source['normalized'].get('quality', []),
         })
     rivers = health['products']['river']
     result = {
@@ -129,6 +130,9 @@ def markdown(value):
                      (f"{rain['total']:.1f}" if rain else 'Withheld') + ' | ' +
                      (f"{temp['minimum']:.1f}–{temp['maximum']:.1f}" if temp else 'Withheld') + ' | ' +
                      (f"{gust['maximum']:.1f}" if gust else 'Withheld') + ' |')
+    for w in value['weather']:
+        if w.get('quarantined_samples'):
+            lines += ['', f"{w['place_id']} / {w['model']}: {len(w['quarantined_samples'])} invalid source samples withheld; see JSON for exact variables, times and original values."]
     lines += ['', 'Two model outputs are not probabilities or independent confirmation. Per-variable withholding reasons, retrieval times and failed attempts are in the JSON brief.', '',
               '## River evidence', '',
               f"{value['river_review']['recent']} of {value['river_review']['stored']} stored stations have recent timestamps; "

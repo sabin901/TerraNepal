@@ -36,7 +36,7 @@ PLAUSIBILITY_LIMITS = {'temperature_2m':(-100,70), 'precipitation':(0,2000), 'wi
 # This envelope detects gross mismatch only; it does not approve station mapping.
 MODEL_GRID_TOLERANCE_DEGREES = {'ecmwf_ifs025':.5, 'gfs_global':.5}
 
-def normalize(payload, place, model=None):
+def normalize(payload, place, model=None, quarantine=False):
     if not isinstance(payload,dict) or payload.get('error'): raise ValueError('Provider returned an error or unexpected shape')
     if not isinstance(payload.get('hourly_units'),dict) or not isinstance(payload.get('hourly'),dict):raise ValueError('Unexpected weather units or hourly schema')
     if payload.get('utc_offset_seconds')!=0: raise ValueError('Expected UTC timestamps')
@@ -54,19 +54,25 @@ def normalize(payload, place, model=None):
         raise ValueError('Forecast timestamps must be ordered, distinct and hourly')
     if any(not isinstance(hourly.get(k),list) or len(hourly[k])!=len(times) for k in UNITS):
         raise ValueError('Forecast arrays have inconsistent lengths')
-    points=[]
+    points=[];quality=[]
     for i,t in enumerate(times):
         point={'at':iso(t),'epoch':t}
         for k in UNITS:
             if k=='time': continue
             v=hourly[k][i]
             if v is not None and (not number(v) or not PLAUSIBILITY_LIMITS[k][0]<=v<=PLAUSIBILITY_LIMITS[k][1]):
-                raise ValueError(f'Invalid numeric forecast value: {k}; index={i}; at={iso(t)}; value={repr(v)[:80]}; allowed={PLAUSIBILITY_LIMITS[k][0]}..{PLAUSIBILITY_LIMITS[k][1]} {UNITS[k]}')
+                if quarantine and number(v):
+                    quality.append({'variable':k,'index':i,'at':iso(t),'value':v,'reason':'outside_physical_bounds'})
+                    v=None
+                else:
+                    raise ValueError(f'Invalid numeric forecast value: {k}; index={i}; at={iso(t)}; value={repr(v)[:80]}; allowed={PLAUSIBILITY_LIMITS[k][0]}..{PLAUSIBILITY_LIMITS[k][1]} {UNITS[k]}')
             point[k]=v
         points.append(point)
-    return {'grid_latitude':lat,'grid_longitude':lon,'elevation':payload.get('elevation'),
+    result = {'grid_latitude':lat,'grid_longitude':lon,'elevation':payload.get('elevation'),
             'units':UNITS,'points':points,'model_issued_at':None,
             'time_note':'Model run issuance is not supplied by this endpoint. Retrieval time is not issuance time.'}
+    if quality:result['quality']=quality
+    return result
 
 def summarize(normalized, fetched_at, at=None):
     at=time.time() if at is None else at
@@ -121,7 +127,7 @@ class ForecastStore:
                     out.write(r.stdout);temp=Path(out.name)
                 temp.replace(self.raw/rawfile)
             if r.returncode: raise ValueError('Fetch failed: '+r.stderr.decode(errors='replace')[:300])
-            normalized=json.dumps(normalize(json.loads(r.stdout),place,model),allow_nan=False)
+            normalized=json.dumps(normalize(json.loads(r.stdout),place,model,quarantine=True),allow_nan=False)
             status='ok'
         except (ValueError,OSError,subprocess.TimeoutExpired) as e:error=str(e)
         stamp=iso(time.time())
@@ -149,6 +155,7 @@ class ForecastStore:
                         source.update(summarize(normalized,good['fetched_at'],at))
                         source.update({k:good[k] for k in ('id','fetched_at','url','sha256')})
                         source.update({k:normalized[k] for k in ('grid_latitude','grid_longitude','model_issued_at','time_note')})
+                        source['quality']=normalized.get('quality',[])
                     sources.append(source)
                 disagreements={}
                 for hours in ('24','48','72'):

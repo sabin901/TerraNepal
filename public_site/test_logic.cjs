@@ -38,3 +38,17 @@ assert.equal(windowSummary(current,24,at-300).total,0);
 assert.equal(weatherAvailability([current],at-300).usable,1);
 assert.equal(dischargeState({...discharge,normalized:{reach_verified:true}},at-300),'experimental model output');
 console.log('3 clock-skew boundary assertions passed');
+
+const incompleteRain=structuredClone(current);
+incompleteRain.normalized.points[0].precipitation=null;
+incompleteRain.normalized.quality=[{variable:'precipitation',index:0,at:'2026-11-03T19:00:00Z',value:-0.1,reason:'outside_physical_bounds'}];
+assert.equal(windowSummary(incompleteRain,24,at).total,null);
+assert.equal(windowSummary(incompleteRain,24,at).temperatureMin,12);
+assert.equal(windowSummary(incompleteRain,24,at).temperatureMax,12);
+assert.equal(windowSummary(incompleteRain,24,at).gust,3);
+assert.equal(windowSummary(incompleteRain,24,at+7*3600).temperatureMin,null);
+const incompleteTemp=structuredClone(current);
+incompleteTemp.normalized.points[0].temperature_2m=null;
+assert.equal(windowSummary(incompleteTemp,24,at).temperatureMax,null);
+assert.equal(windowSummary(incompleteTemp,24,at).total,0);
+console.log('7 independent-variable and quarantine assertions passed');

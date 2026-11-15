@@ -63,7 +63,8 @@ def collect_weather(snapshot, runtime, at):
     snapshot['weather']=list(prior.values())
     if results:
         good=sum(r['status']=='ok' for r in results)
-        update(snapshot,'weather','completed' if good==len(results) else 'partial',f'{good}/{len(results)} due requests succeeded; {14-len(results)} snapshots reused within hourly cadence. Original retrieval times retained.',good==len(results))
+        quarantined=sum(len(w['normalized'].get('quality',[])) for w in snapshot['weather'])
+        update(snapshot,'weather','completed' if good==len(results) else 'partial',f'{good}/{len(results)} due requests succeeded; {14-len(results)} snapshots reused within hourly cadence. Original retrieval times retained. {quarantined} invalid numeric samples remain quarantined across stored forecasts.',good==len(results))
     with contextlib.closing(store.db()) as db:
         return [dict(r) for r in db.execute('SELECT place_id,model,url,fetched_at,status,sha256,error FROM weather_fetches WHERE fetched_at>=?',(sources.iso(at),))]
 

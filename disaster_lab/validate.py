@@ -22,7 +22,7 @@ if __name__=='__main__':
                 raw=(store.raw/row['raw_file']).read_bytes()
                 if hashlib.sha256(raw).hexdigest()!=row['sha256']:errors.append('checksum mismatch')
                 place=next(p for p in PLACES if p['id']==row['place_id'])
-                if normalize(json.loads(raw),place)!=json.loads(row['normalized']):errors.append('normalized values differ')
+                if normalize(json.loads(raw),place,row['model'],quarantine=True)!=json.loads(row['normalized']):errors.append('normalized values differ')
             except (OSError,ValueError,StopIteration) as e:errors.append(str(e))
             checks.append({'fetch_id':row['id'],'place':row['place_id'],'model':row['model'],'errors':errors})
     analyses=[]

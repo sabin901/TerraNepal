@@ -38,6 +38,36 @@ class HealthTests(unittest.TestCase):
         self.assertFalse(r['complete_horizon']['precipitation'])
         self.assertFalse(r['usable'])
 
+    def test_quarantine_degrades_health_preserves_independent_variables(self):
+        n=self.s['weather'][0]['normalized']
+        index=next(i for i,p in enumerate(n['points']) if p['epoch']>self.at+3600)
+        point=n['points'][index];point['precipitation']=None
+        n['quality']=[{'variable':'precipitation','index':index,'at':point['at'],
+                       'value':-0.1,'reason':'outside_physical_bounds'}]
+        result=health.report(self.s,self.at)
+        pair=result['products']['weather']['pairs'][0]
+        self.assertEqual(result['status'],'degraded')
+        self.assertEqual(pair['quarantined_samples'],1)
+        self.assertEqual(pair['quarantined_in_horizon'],1)
+        self.assertFalse(pair['complete_horizon']['precipitation'])
+        self.assertTrue(pair['complete_horizon']['temperature_2m'])
+        self.assertTrue(pair['complete_horizon']['wind_gusts_10m'])
+        self.assertEqual(result['products']['weather']['quarantined_pairs'],1)
+        self.assertEqual(result['products']['weather']['quarantined_samples'],1)
+
+    def test_outside_horizon_quarantine_still_reported(self):
+        n=self.s['weather'][0]['normalized'];point=n['points'][-1]
+        self.assertGreater(point['epoch'],self.at+24*3600)
+        point['precipitation']=None
+        n['quality']=[{'variable':'precipitation','index':len(n['points'])-1,'at':point['at'],
+                       'value':-0.1,'reason':'outside_physical_bounds'}]
+        result=health.report(self.s,self.at)
+        pair=result['products']['weather']['pairs'][0]
+        self.assertTrue(pair['usable'])
+        self.assertEqual(pair['quarantined_samples'],1)
+        self.assertEqual(pair['quarantined_in_horizon'],0)
+        self.assertEqual(result['status'],'degraded')
+
     def test_future_publication_invalid(self):
         self.assertEqual(health.report(self.s, self.at - 301)['status'], 'invalid')
 

@@ -65,9 +65,13 @@ def report(snapshot, at=None, publication_limit=7200, hours=24):
                         for key in ('precipitation', 'temperature_2m', 'wind_gusts_10m')}
             weather.append({'place_id': w['place_id'], 'model': w['model'], **fresh,
                             'complete_horizon': complete, 'latest_failed': attempt['status'] == 'error',
-                            'usable': fresh['recent'] and all(complete.values())})
+                            'usable': fresh['recent'] and all(complete.values()),
+                            'quarantined_samples': len(w['normalized'].get('quality',[])),
+                            'quarantined_in_horizon': sum(start < epoch(q['at']) <= start + hours*3600 for q in w['normalized'].get('quality',[]))})
         products['weather'] = {'expected': 14, 'stored': len(weather), 'recent': sum(w['recent'] for w in weather),
                                'usable': sum(w['usable'] for w in weather), 'latest_failed': sum(w['latest_failed'] for w in weather),
+                               'quarantined_samples': sum(w['quarantined_samples'] for w in weather),
+                               'quarantined_pairs': sum(w['quarantined_samples'] > 0 for w in weather),
                                'horizon_hours': hours, 'window_start': start, 'window_end': start + hours * 3600, 'pairs': weather}
         for name, rows, limit in [('discharge', snapshot.get('discharge', []), 86400),
                                   ('earthquakes', [snapshot['earthquakes']] if snapshot.get('earthquakes') else [], 7200)]:
@@ -84,7 +88,7 @@ def report(snapshot, at=None, publication_limit=7200, hours=24):
                 failed.append(name)
         result['latest_failed_or_partial_products'] = failed
         degraded = (not result['publication']['recent'] or products['weather']['usable'] != 14
-                    or products['weather']['latest_failed'] > 0 or bool(failed)
+                    or products['weather']['latest_failed'] > 0 or products['weather']['quarantined_samples'] > 0 or bool(failed)
                     or any(products[n]['recent'] == 0 for n in ('river', 'rain', 'earthquakes', 'discharge')))
         result['status'] = 'degraded' if degraded else 'healthy'
         result['note'] = 'Healthy means configured availability checks pass, not complete coverage or forecast accuracy. Individual stale stations remain counted.'

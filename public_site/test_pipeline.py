@@ -26,6 +26,68 @@ class PublicSnapshotTests(unittest.TestCase):
     def test_missing_weather_value_preserved(self):
         s=copy.deepcopy(self.seed);s['weather'][0]['normalized']['points'][0]['precipitation']=None
         self.assertIsNone(p.validate(s)['weather'][0]['normalized']['points'][0]['precipitation'])
+    def quarantined_snapshot(self):
+        s=copy.deepcopy(self.seed)
+        n=s['weather'][0]['normalized'];point=n['points'][17]
+        point['precipitation']=None
+        n['quality']=[{'variable':'precipitation','index':17,'at':point['at'],
+                       'value':-0.1,'reason':'outside_physical_bounds'}]
+        return s
+
+    def test_quarantine_receipt_replays_and_preserves_source_missingness(self):
+        s=self.quarantined_snapshot()
+        n=s['weather'][0]['normalized'];n['points'][18]['precipitation']=None
+        checked=p.validate(s)['weather'][0]['normalized']
+        self.assertIsNone(checked['points'][17]['precipitation'])
+        self.assertIsNone(checked['points'][18]['precipitation'])
+        self.assertEqual(len(checked['quality']),1)
+        self.assertIsNotNone(checked['points'][17]['temperature_2m'])
+        self.assertEqual(checked['quality'][0]['value'],-0.1)
+
+    def test_quarantine_rejects_forged_or_ambiguous_receipts(self):
+        mutations=[
+            lambda n:n['quality'].append(copy.deepcopy(n['quality'][0])),
+            lambda n:n['quality'][0].update(index=True),
+            lambda n:n['quality'][0].update(index=-1),
+            lambda n:n['quality'][0].update(index=999),
+            lambda n:n['quality'][0].update(at=n['points'][18]['at']),
+            lambda n:n['quality'][0].update(variable='time'),
+            lambda n:n['quality'][0].update(value=0),
+            lambda n:n['quality'][0].update(value=True),
+            lambda n:n['quality'][0].update(value=float('nan')),
+            lambda n:n['quality'][0].update(reason='source_missing'),
+            lambda n:n['quality'][0].update(extra='unreviewed'),
+            lambda n:n['points'][17].update(precipitation=0),
+            lambda n:n.update(quality=[]),
+            lambda n:n.update(quality=None),
+        ]
+        for mutate in mutations:
+            with self.subTest(mutation=mutate):
+                s=self.quarantined_snapshot();mutate(s['weather'][0]['normalized'])
+                with self.assertRaises(ValueError):p.validate(s)
+
+    def test_raw_weather_rows_replay_quarantine_and_detect_tampering(self):
+        import hashlib
+        s=self.quarantined_snapshot();w=s['weather'][0];n=w['normalized']
+        payload={'latitude':n['grid_latitude'],'longitude':n['grid_longitude'],
+                 'elevation':n['elevation'],'utc_offset_seconds':0,'hourly_units':n['units'],
+                 'hourly':{'time':[x['epoch'] for x in n['points']],
+                           **{k:[x[k] for x in n['points']] for k in p.PLAUSIBILITY_LIMITS}}}
+        payload['hourly']['precipitation'][17]=-0.1
+        raw=json.dumps(payload).encode();sha=hashlib.sha256(raw).hexdigest()
+        with tempfile.TemporaryDirectory() as tmp:
+            store=p.ForecastStore(tmp);(store.raw/(sha+'.json')).write_bytes(raw)
+            with closing(store.db()) as db,db:
+                db.execute('INSERT INTO weather_fetches(place_id,model,fetched_at,status,sha256,raw_file,normalized) VALUES (?,?,?,?,?,?,?)',
+                           (w['place_id'],w['model'],w['fetched_at'],'ok',sha,sha+'.json',json.dumps(n)))
+            rows=p.weather_rows(store)
+            self.assertEqual(rows[0]['normalized'],n)
+            self.assertEqual((store.raw/(sha+'.json')).read_bytes(),raw)
+            with closing(store.db()) as db,db:
+                wrong=copy.deepcopy(n);wrong['quality'][0]['value']=-0.2
+                db.execute('UPDATE weather_fetches SET normalized=?',(json.dumps(wrong),))
+            with self.assertRaisesRegex(ValueError,'integrity'):p.weather_rows(store)
+
     def test_missing_stations_keep_original_timestamp(self):
         rows=self.seed['rivers'][:2]
         self.assertEqual(p.merge_stations(rows,[]),sorted(rows,key=lambda s:s['id']))

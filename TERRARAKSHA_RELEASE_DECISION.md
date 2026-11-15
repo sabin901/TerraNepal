@@ -114,3 +114,35 @@ Avoid broad tagging or claims of partnerships, national accuracy or lives saved.
 - https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
 - https://dhm.gov.np/
 - https://satark.bipadportal.gov.np/
+
+## Subsequent completion work — 15 November 2026
+
+The user selected **noncommercial research publication now**, with company use to
+be prepared separately. This supersedes the publication-choice hold above; it does
+not change scientific or operational NO-GO findings or the company-use terms.
+
+Implemented the reviewed partial-variable schema described earlier: finite invalid
+rolling values become null with explicit original-value/time/variable receipts.
+Raw bytes remain unchanged. Shape, units and nonnumeric/nonfinite failures still
+reject the response. Original-run research remains strict. Public validation
+reconstructs and re-normalizes receipts, rejecting tampering. Health stays degraded
+for quarantined values, even outside the current display horizon.
+
+Fresh isolated collection on this date obtained all14 weather pairs. All14 had
+complete next24-hour windows; four ECMWF pairs carried12 invalid rainfall samples
+later in their96-hour series. This is improved availability, not improved scientific
+accuracy. Kathmandu72-hour rainfall was correctly withheld while temperature/gust
+remained visible. All14 rolling raw responses were retained as hashed evidence.
+
+The weather view now includes temperature ranges and explicit quarantine details.
+Browser verification confirmed the24-hour/72-hour distinction and original negative
+values in the disclosure. Pages deployment now depends on the full research and
+archive suites plus the dependency audit, instead of only selected research tests.
+
+Company transition preparation is in COMMERCIAL_DATA_TRANSITION.md. Neither a
+source migration nor commercial permission is implied by research publication.
+
+Final local checks for this update:78 public tests,119 research tests,15 archive
+tests and36 JavaScript assertions passed. pip-audit reported no known vulnerabilities
+in the pinned Python requirements. Publication verification is recorded separately
+from local tests; no company or warning-service launch is claimed.
