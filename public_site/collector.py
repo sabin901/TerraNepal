@@ -139,11 +139,15 @@ def _collect(output,state_root):
             'history_runs':state['runs']+1,'revisions':state['revisions'],'catchup_gaps':state['gaps'],
             'quality':q,'history_branch':'codex/data-snapshots','previous_revision':parent or None}
         p.validate(snapshot)
+        from health import report as health_report
+        availability=health_report(snapshot,at=time.time())
+        p.write(state_root/'health-report.json',availability)
         report=history.save_run(state_root,state,snapshot,changes,fetches)
         p.write(output,snapshot)
         a.db.execute('UPDATE runs SET status=?,finished_at=? WHERE id=?',('partial' if q['warnings'] else 'completed',p.now(),a.run_id));a.db.commit()
         for warning in q['warnings']:print('::warning::'+warning)
         report.update(updates=snapshot['updates'],quality=q)
+        report['availability_status']=availability['status']
         p.write(state_root/'run-report.json',report)
         if os.environ.get('GITHUB_STEP_SUMMARY'):
             with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:

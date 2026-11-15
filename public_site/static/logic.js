@@ -26,6 +26,17 @@
     const age=(at-epoch(source.fetched_at))/3600;
     return !Number.isFinite(age)||age<0||age>24?'stale / unavailable':'experimental model output';
   }
-  const exports={finite,epoch,freshness,windowSummary,dischargeState};
+  function weatherAvailability(sources,at=Date.now()/1000){
+    const result={stored:sources.length,recent:0,usable:0,latestFailed:0};
+    for(const source of sources){
+      const age=(at-epoch(source.fetched_at))/3600;
+      if(Number.isFinite(age)&&age>=0&&age<=6)result.recent++;
+      const summary=windowSummary(source,24,at);
+      if(summary.state==='recent'&&summary.points.every(p=>p&&finite(p.temperature_2m)&&finite(p.wind_gusts_10m)))result.usable++;
+      if(source.latest_attempt?.status==='error')result.latestFailed++;
+    }
+    return result;
+  }
+  const exports={finite,epoch,freshness,windowSummary,dischargeState,weatherAvailability};
   if(typeof module!=='undefined')module.exports=exports;else root.TerraLogic=exports;
 })(typeof globalThis!=='undefined'?globalThis:this);

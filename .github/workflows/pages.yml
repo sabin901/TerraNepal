@@ -27,6 +27,8 @@ jobs:
         run: |
           python -m unittest discover -s public_site -p 'test_*.py' -v
           node public_site/test_logic.cjs
+          python -m unittest discover -s disaster_lab -p 'test_forecast_runs.py'
+          python -m unittest discover -s disaster_lab -p 'test_ghcnh.py'
       - name: Build reviewed seed without network access
         run: python public_site/pipeline.py build --output runtime/site
   build:
@@ -55,7 +57,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: collection-report-${{ github.run_id }}-${{ github.run_attempt }}
-          path: runtime/public-state/run-report.json
+          path: |
+            runtime/public-state/run-report.json
+            runtime/public-state/health-report.json
           retention-days: 14
           if-no-files-found: ignore
       - uses: actions/upload-pages-artifact@v4
