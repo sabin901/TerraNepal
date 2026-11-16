@@ -1,0 +1,25 @@
+# Deny by default, including local credentials, archive originals and SQLite state.
+**
+!app.py
+!vercel.json
+!requirements.txt
+!deploy/
+deploy/**
+!deploy/vercel_app.py
+!deploy/build_vercel.py
+!public_site/
+public_site/**
+!public_site/pipeline.py
+!public_site/health.py
+!public_site/intelligence.py
+!public_site/static/
+!public_site/static/**
+!disaster_lab/
+disaster_lab/**
+!disaster_lab/data.py
+!disaster_lab/weather.py
+!disaster_lab/analytics.py
+!disaster_lab/static/
+disaster_lab/static/**
+!disaster_lab/static/lab-status.html
+!disaster_lab/static/lab-status.css

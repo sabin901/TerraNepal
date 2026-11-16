@@ -66,3 +66,12 @@ and [deployment instructions](disaster_lab/DEPLOYMENT.md).
 A [direct NOAA GFS research importer](disaster_lab/DIRECT_GFS.md) now preserves
 native forecast intervals as a future commercial-data option. It is separate from
 the current public weather pipeline and has not established local predictive skill.
+
+## Deploy on Vercel
+
+Import this repository into Vercel using **Flask**, root **./**, and the committed
+build settings. No environment variables are needed for the **public read-only**
+deployment. Existing GitHub collection supplies dated validated data. Private case
+writes and the local archive are not included; they require durable storage migration.
+
+[Deployment instructions](deploy/VERCEL.md) · [Deploy a copy](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsabin901%2FTerraNepal&project-name=terraraksha&repository-name=terraraksha)

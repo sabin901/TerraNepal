@@ -12,3 +12,7 @@ disaster_archive/.collector.lock
 
 # Local audit reports and browser captures are not public site assets.
 disaster_lab/reports/
+
+# Generated Vercel assets and local account linkage
+/public/
+/.vercel/
