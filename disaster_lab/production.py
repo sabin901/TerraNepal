@@ -25,7 +25,7 @@ from snapshots import SnapshotCache
 from cases import CaseStore
 from exposure import assess as assess_exposure
 
-LOGIN='''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · Nepal Disaster Lab</title><link rel="stylesheet" href="/login.css"></head><body><main class="login-card"><div class="brand">◭ NEPAL DISASTER LAB</div><p class="eyebrow">PRIVATE RESEARCH WORKSPACE</p><h1>Evidence for<br>better preparation.</h1><p>Sign in to explore observations, weather outlooks and experimental river models.</p><form method="post" action="/login"><input type="hidden" name="token" value="{{ token }}"><label for="password">Workspace password</label><input id="password" name="password" type="password" autocomplete="current-password" required maxlength="1024"><button type="submit">Open workspace →</button></form>{% if error %}<p role="alert" class="error">{{ error }}</p>{% endif %}<small>This research workspace does not issue disaster warnings.</small></main></body></html>'''
+LOGIN='''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · TerraRaksha</title><link rel="stylesheet" href="/login.css"></head><body><main class="login-card"><div class="brand">◭ TERRARAKSHA</div><p class="eyebrow">PRIVATE RESEARCH WORKSPACE</p><h1>Evidence for<br>better preparation.</h1><p>Sign in to explore observations, weather outlooks and experimental river models.</p><form method="post" action="/login"><input type="hidden" name="token" value="{{ token }}"><label for="password">Workspace password</label><input id="password" name="password" type="password" autocomplete="current-password" required maxlength="1024"><button type="submit">Open workspace →</button></form>{% if error %}<p role="alert" class="error">{{ error }}</p>{% endif %}<small>This research workspace does not issue disaster warnings.</small></main></body></html>'''
 
 def secret_file(root):
     path=root/'session.key'
@@ -184,7 +184,7 @@ def create_app(root=ROOT,state=None,local=False,hosts=None,origin=None):
     def files(path='index.html'):
         docs={'guide':Path(root)/'disaster_lab/README.md','methods':Path(root)/'disaster_lab/METHODS.md','research':Path(root)/'planning/hazard-data-and-scientific-method.md'}
         if path in docs:return Response(docs[path].read_bytes(),content_type='text/plain; charset=utf-8')
-        allowed={'workspace.html':'text/html','workspace.js':'text/javascript','workspace.css':'text/css','index.html':'text/html','app.js':'text/javascript','forecast.js':'text/javascript','style.css':'text/css','modern.css':'text/css','nepal.geojson':'application/geo+json','favicon.svg':'image/svg+xml'}
+        allowed={'lab-status.html':'text/html','lab-status.css':'text/css','workspace.html':'text/html','workspace.js':'text/javascript','workspace.css':'text/css','index.html':'text/html','app.js':'text/javascript','forecast.js':'text/javascript','style.css':'text/css','modern.css':'text/css','nepal.geojson':'application/geo+json','favicon.svg':'image/svg+xml'}
         if path not in allowed:return json_response({'error':'Not found'},404)
         return Response((STATIC/path).read_bytes(),content_type=allowed[path]+'; charset=utf-8')
     return app

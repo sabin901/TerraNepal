@@ -219,6 +219,8 @@ def build(snapshot,output):
     if out.exists() and any(out.iterdir()):raise ValueError('Build destination must be empty')
     out.mkdir(parents=True,exist_ok=True)
     for name in ASSETS:shutil.copyfile(Path(__file__).with_name('static')/name,out/name)
+    for name in ('lab-status.html', 'lab-status.css'):
+        shutil.copyfile(ROOT/'disaster_lab/static'/name,out/name)
     write(out/'data/snapshot.json',s)
     write(out/'data/situation-brief.json',assessment)
     (out/'situation-brief.md').write_text(markdown(assessment))
