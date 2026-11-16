@@ -57,7 +57,7 @@ Independent review, Nepali accessibility testing, delivery monitoring, security 
 
 ## Deployment decision
 
-Prepare the existing Docker Compose application for an Oracle Always Free eligible Ampere VM if capacity and signup are available. Do not select paid resources or rely on trial credits. A provider account, owner-controlled SSH access and HTTPS hostname are external prerequisites. Actual quota must be checked in the account; free availability is not guaranteed. No remote instance has been created.
+The user requires no card verification. Oracle is ruled out; `deploy/ORACLE_FREE.md` is retained as a rejected-option assessment. Vercel is being evaluated at the user's request. Python APIs and background daemons are supported, but ephemeral runtime storage requires migration of SQLite and raw archives to durable external services. No complete free/no-card hosting combination or remote deployment is established. Account signup requirements and combined storage/compute quotas must be verified before selection.
 
 The current runtime uses SQLite on shared local persistent disk with one web service and one worker. An ephemeral free web container is not an equivalent deployment. Preserve raw archive evidence and private state with verified backups; do not publish the archive or credentials to GitHub.
 

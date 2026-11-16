@@ -1,7 +1,7 @@
-# Full lab hosting: Oracle Always Free candidate
+# Rejected hosting option: Oracle Always Free
 
 Checked 15 November 2026. No instance, account, domain or subscription has been created.
-This is the selected candidate, conditional on the owner's account eligibility and capacity.
+Rejected after the user required no card verification. Retained for decision history; do not provision.
 
 ## Fit and constraints
 
