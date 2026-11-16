@@ -56,6 +56,12 @@ class VercelTests(unittest.TestCase):
                 opener.return_value.open.return_value=Reply(body)
                 self.assertEqual(self.client.get('/data/snapshot.json').status_code,503)
 
+    def test_dashboard_and_all_linked_assets(self):
+        for path in ('/', '/index.html', '/app.js', '/logic.js', '/style.css', '/favicon.svg', '/lab-status.html', '/lab-status.css'):
+            self.assertEqual(self.client.get(path).status_code,200,path)
+        self.assertIn('VERCEL PUBLIC RESEARCH',self.client.get('/').text)
+        self.assertEqual(self.client.get('/vercel_app.py').status_code,404)
+
     def test_redirects_rejected(self):
         with self.assertRaises(ValueError):v.NoRedirect().redirect_request(None,None,None,None,None,None)
 

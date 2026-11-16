@@ -10,6 +10,7 @@ deploy/**
 !public_site/
 public_site/**
 !public_site/pipeline.py
+!public_site/sources.py
 !public_site/health.py
 !public_site/intelligence.py
 !public_site/static/

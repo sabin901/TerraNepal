@@ -50,6 +50,23 @@ def headers(response):
     response.headers['Cache-Control']='no-store'
     return response
 
+# Explicit allowlist also serves the dashboard when platform static routing is absent.
+PUBLIC_ASSETS = {'index.html':'text/html', 'app.js':'text/javascript',
+    'logic.js':'text/javascript', 'style.css':'text/css', 'favicon.svg':'image/svg+xml',
+    'lab-status.html':'text/html', 'lab-status.css':'text/css'}
+
+@app.get('/')
+@app.get('/<name>')
+def asset(name='index.html'):
+    if name not in PUBLIC_ASSETS:
+        return missing(None)
+    folder = ROOT/'disaster_lab/static' if name.startswith('lab-status.') else ROOT/'public_site/static'
+    content=(folder/name).read_text()
+    if name=='index.html':
+        content=content.replace('NEPAL / PUBLIC RESEARCH BETA','NEPAL / VERCEL PUBLIC RESEARCH')
+        content=content.replace('<div id="status"', '<p>Public evidence deployment. Private archive and case editing remain in the local lab. <a href="/api/capabilities">Deployment capabilities</a></p><div id="status"')
+    return Response(content,content_type=PUBLIC_ASSETS[name]+'; charset=utf-8')
+
 @app.get('/health/live')
 def live():
     return jsonify(status='ok',mode='public_read_only',scientific_validation='not_established')
