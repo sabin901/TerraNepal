@@ -25,7 +25,7 @@ def git(*args, input=None, env=None):
     return result.stdout
 
 def allowed(name):
-    return name in ('latest.json','state.json','manifest.json','weather-evidence-state.json') or bool(re.fullmatch(r'(?:history|evidence/weather)/\d{4}-\d{2}-\d{2}/[0-9a-f]{64}\.json\.gz',name))
+    return name in ('latest.json','state.json','manifest.json','weather-evidence-state.json','vercel.json','.vercelignore') or bool(re.fullmatch(r'(?:history|evidence/weather)/\d{4}-\d{2}-\d{2}/[0-9a-f]{64}\.json\.gz',name))
 
 def tree(ref):
     result={}
@@ -75,6 +75,8 @@ def verify_file(name,raw):
             if 'url' in fetch:
                 url=urlparse(fetch['url'])
                 if url.scheme!='https' or url.hostname not in ('bipadportal.gov.np','earthquake.usgs.gov','flood-api.open-meteo.com','api.open-meteo.com') or url.username or url.password:raise ValueError('Unexpected receipt URL')
+    elif name in ('vercel.json','.vercelignore'):
+        return raw.decode('utf-8',errors='replace')
     else:
         obj=json.loads(raw)
         if name=='latest.json':
@@ -135,6 +137,8 @@ def save(root):
               'history_files':sum(n.startswith('history/') for n in set(prior)|set(files))}
     manifest['weather_evidence_files']=sum(n.startswith('evidence/weather/') for n in set(prior)|set(files))
     files['manifest.json']=(json.dumps(manifest,sort_keys=True)+'\n').encode()
+    files['vercel.json']=b'{\n  "ignoreCommand": "exit 0"\n}\n'
+    files['.vercelignore']=b'*\n'
     total=sum(size for name,(_,size) in prior.items() if name not in files)+sum(map(len,files.values()))
     storage={'current_tree_bytes':total,'budget_bytes':MAX_BYTES,'fraction_used':total/MAX_BYTES,'new_or_replaced_bytes':sum(map(len,files.values())),'note':'Current tree only; Git object history adds storage. No automatic deletion. Export/rotation required before budget exhaustion.'}
     (root/'storage-report.json').write_text(json.dumps(storage,indent=2)+'\n')
