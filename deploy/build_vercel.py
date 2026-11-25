@@ -4,10 +4,16 @@ import shutil
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ('index.html', 'app.js', 'style.css', 'logic.js', 'favicon.svg', 'i18n.js', 'terra-map.js', 'manifest.json', 'sw.js')
 
-def build(output=None):
+import argparse
+import sys
+
+def build(output=None, clean=False):
     out = Path(output) if output is not None else ROOT/'public'
-    if out.exists() and any(out.iterdir()):
-        raise ValueError('Output must be empty; do not mix private and public assets')
+    if out.exists():
+        if clean:
+            shutil.rmtree(out)
+        elif any(out.iterdir()):
+            raise ValueError('Output must be empty; do not mix private and public assets')
     out.mkdir(parents=True, exist_ok=True)
     for name in ASSETS:
         shutil.copyfile(ROOT/'public_site/static'/name, out/name)
@@ -21,4 +27,8 @@ def build(output=None):
     print('Prepared 11 allowlisted public assets; no local archive or state included.')
 
 if __name__ == '__main__':
-    build()
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--output', '-o', help='Target output directory')
+    p.add_argument('--clean', action='store_true', help='Clean output directory before building')
+    args = p.parse_args()
+    build(output=args.output, clean=args.clean)
