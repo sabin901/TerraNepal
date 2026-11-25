@@ -2,7 +2,7 @@
 from pathlib import Path
 import shutil
 ROOT = Path(__file__).resolve().parents[1]
-ASSETS = ('index.html', 'app.js', 'style.css', 'logic.js', 'favicon.svg', 'i18n.js', 'terra-map.js')
+ASSETS = ('index.html', 'app.js', 'style.css', 'logic.js', 'favicon.svg', 'i18n.js', 'terra-map.js', 'manifest.json', 'sw.js')
 
 def build(output=None):
     out = Path(output) if output is not None else ROOT/'public'
@@ -18,7 +18,7 @@ def build(output=None):
     page=index.read_text(encoding='utf-8').replace('NEPAL / PUBLIC RESEARCH BETA', 'NEPAL / VERCEL PUBLIC RESEARCH')
     page=page.replace('<div id="status"', '<p>Public evidence deployment. Private archive and case editing remain in the local lab. <a href="/api/capabilities">Deployment capabilities</a></p><div id="status"')
     index.write_text(page,encoding='utf-8')
-    print('Prepared 9 allowlisted public assets; no local archive or state included.')
+    print('Prepared 11 allowlisted public assets; no local archive or state included.')
 
 if __name__ == '__main__':
     build()

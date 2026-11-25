@@ -54,6 +54,7 @@ def headers(response):
 PUBLIC_ASSETS = {'index.html':'text/html', 'app.js':'text/javascript',
     'logic.js':'text/javascript', 'style.css':'text/css', 'favicon.svg':'image/svg+xml',
     'i18n.js':'text/javascript', 'terra-map.js':'text/javascript',
+    'manifest.json':'application/manifest+json', 'sw.js':'text/javascript',
     'lab-status.html':'text/html', 'lab-status.css':'text/css'}
 
 @app.get('/')
