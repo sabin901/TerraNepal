@@ -7,6 +7,7 @@ $('#assessed-at').value=new Date().toISOString();
 $('#case-read').onsubmit=e=>{e.preventDefault();run(()=>request('/api/cases?'+new URLSearchParams({id:$('#case-id').value,...($('#cutoff').value?{cutoff:$('#cutoff').value}:{})})));};
 $('#list').onclick=()=>run(()=>request('/api/cases'));
 $('#integrity').onclick=()=>run(()=>request('/api/case-integrity'));
+const inspectBtn=$('#inspect-stations');if(inspectBtn)inspectBtn.onclick=()=>run(()=>request('/api/station-registry'));
 $('#case-write').onsubmit=e=>{e.preventDefault();run(async()=>{if(!$('#case-id').value.trim())throw Error('Enter a case identifier first.');return request('/api/'+$('#entry-kind').value,{case_id:$('#case-id').value,document:await file('#case-document')});});};
 $('#exposure').onsubmit=e=>{e.preventDefault();run(async()=>{const payload={hazards:await file('#hazards'),assets:await file('#assets'),at:$('#assessed-at').value,...($('#valid-at').value?{valid_at:$('#valid-at').value}:{})};if(JSON.stringify(payload).length>15500)throw Error('Combined exposure request exceeds 15.5 KB web form limit. Use the local CLI for larger datasets.');return request('/api/exposure',payload);});};
 $('#download').onclick=()=>{if(!result)return;const url=URL.createObjectURL(new Blob([JSON.stringify(result,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='terraraksha-research-result.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
@@ -24,6 +25,13 @@ function renderSummary(value){
   text('p',value.coverage);const table=text('table','');const header=text('tr','',table);for(const label of ['Asset','Sector','Assessment','Matching footprints'])text('th',label,header);
   for(const asset of value.assets){const row=text('tr','',table);for(const label of [asset.asset_id,asset.sector,asset.status.replaceAll('_',' '),String(asset.matches.length)])text('td',label,row);}
   text('p','No damage or safety conclusion is established.');
+ }else if(value.candidates||value.schema_version){
+  text('p',(value.candidates?value.candidates.length:0)+' candidate station mappings.');
+  if(value.note)text('p',value.note);
+  if(Array.isArray(value.candidates)&&value.candidates.length){
+   const table=text('table','');const header=text('tr','',table);for(const label of ['Station ID','Place','Distance (km)','Status'])text('th',label,header);
+   for(const c of value.candidates){const row=text('tr','',table);for(const val of [c.station_id,c.place_name,c.distance_km,c.verified?'Verified':'Pending'])text('td',String(val),row);}
+  }
  }else if(value.hash_chains){text('p',value.cases+' cases; '+value.events+' records; hash chains '+value.hash_chains+'.');text('p',value.note);}
  else{text('p','Record saved. Inspect the full evidence JSON for its revision hash.');}
 }

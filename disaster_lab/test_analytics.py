@@ -6,7 +6,7 @@ import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
-from analytics import analyze, predict, station_quality
+from analytics import analyze, predict, station_quality, rainfall_features
 from data import Dataset, clean_points
 from weather import normalize, summarize, ForecastStore, PLACES
 from test_lab import BASE, point
@@ -65,6 +65,13 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(q['usable_points'],1);self.assertEqual(q['invalid_rows'],1)
     def test_invalid_horizon(self):
         with self.assertRaises(ValueError):analyze(self.rows,999,self.at)
+    def test_rainfall_features_lags(self):
+        r_pts = [(i*3600, {'observed_at': f'2026-09-01T{i:02d}:00:00Z', 'water_level_source_units': 5.0}) for i in range(10)]
+        rain_pts = [(i*3600, {'rainfall': 2.5}) for i in range(10)]
+        feats = rainfall_features(r_pts, rain_pts, lag_hours=(1, 3))
+        self.assertEqual(len(feats), 10)
+        self.assertEqual(feats[4]['rain_lag_1h'], 5.0)  # includes window bounds
+        self.assertGreater(feats[4]['rain_lag_3h'], feats[4]['rain_lag_1h'])
 
 class WeatherTests(unittest.TestCase):
     def setUp(self):self.payload=weather_payload();self.place=PLACES[0]

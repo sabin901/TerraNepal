@@ -71,6 +71,40 @@ def station_quality(rows, at=None):
             'review_large_steps':unusual,'constant_last_12_points':len(past)>=12 and len({r['water_level_source_units'] for t,r in past[-12:]})==1,
             'units_verified':False,'datum_verified':False,'thresholds_verified':False}
 
+def rainfall_features(river_points, rain_points, lag_hours=(1, 3, 6)):
+    """Map prior upstream rainfall totals to river observations at given lag offsets.
+
+    Parameters:
+        river_points: list of (timestamp, river_row) sorted by timestamp
+        rain_points: list of (timestamp, rain_row) sorted by timestamp
+        lag_hours: tuple of lag horizons in hours to accumulate prior rainfall
+
+    Returns:
+        list of dicts with 'epoch', 'observed_at', 'level', and 'rain_lag_{h}h' entries.
+    """
+    if not river_points or not rain_points:
+        return []
+    rain_times = [t for t, _ in rain_points]
+    features = []
+    for t, r in river_points:
+        entry = {
+            'epoch': t,
+            'observed_at': r.get('observed_at'),
+            'level': r.get('water_level_source_units'),
+        }
+        for lag in lag_hours:
+            window_start = t - lag * 3600
+            idx_start = bisect.bisect_left(rain_times, window_start)
+            idx_end = bisect.bisect_right(rain_times, t)
+            amounts = [
+                pt[1].get('rainfall') or pt[1].get('rain_source_units') or 0.0
+                for pt in rain_points[idx_start:idx_end]
+                if number(pt[1].get('rainfall') or pt[1].get('rain_source_units'))
+            ]
+            entry[f'rain_lag_{lag}h'] = round(sum(amounts), 2) if amounts else 0.0
+        features.append(entry)
+    return features
+
 def analyze(rows, horizon=60, at=None):
     if horizon not in (30,60,180): raise ValueError('Unsupported horizon')
     at = time.time() if at is None else at
