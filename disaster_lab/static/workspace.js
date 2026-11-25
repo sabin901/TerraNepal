@@ -8,7 +8,7 @@ $('#case-read').onsubmit=e=>{e.preventDefault();run(()=>request('/api/cases?'+ne
 $('#list').onclick=()=>run(()=>request('/api/cases'));
 $('#integrity').onclick=()=>run(()=>request('/api/case-integrity'));
 $('#case-write').onsubmit=e=>{e.preventDefault();run(async()=>{if(!$('#case-id').value.trim())throw Error('Enter a case identifier first.');return request('/api/'+$('#entry-kind').value,{case_id:$('#case-id').value,document:await file('#case-document')});});};
-$('#exposure').onsubmit=e=>{e.preventDefault();run(async()=>request('/api/exposure',{hazards:await file('#hazards'),assets:await file('#assets'),at:$('#assessed-at').value,...($('#valid-at').value?{valid_at:$('#valid-at').value}:{})}));};
+$('#exposure').onsubmit=e=>{e.preventDefault();run(async()=>{const payload={hazards:await file('#hazards'),assets:await file('#assets'),at:$('#assessed-at').value,...($('#valid-at').value?{valid_at:$('#valid-at').value}:{})};if(JSON.stringify(payload).length>15500)throw Error('Combined exposure request exceeds 15.5 KB web form limit. Use the local CLI for larger datasets.');return request('/api/exposure',payload);});};
 $('#download').onclick=()=>{if(!result)return;const url=URL.createObjectURL(new Blob([JSON.stringify(result,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='terraraksha-research-result.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 request('/api/session').then(s=>{token=s.token;$('#status').textContent='Private workspace connected. No records are sent to external services.';}).catch(e=>{$('#error').textContent=e.message;$('#error').hidden=false;$('#status').textContent='Sign in to use this workspace.';});
 

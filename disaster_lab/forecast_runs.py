@@ -9,7 +9,6 @@ import os
 from pathlib import Path
 import sqlite3
 import subprocess
-import tempfile
 import time
 import urllib.parse
 from weather import PLACES, MODELS, normalize
@@ -62,13 +61,10 @@ def collect(root, place_id, model, run):
     except (OSError, subprocess.TimeoutExpired) as exc:
         result = subprocess.CompletedProcess([],1,getattr(exc,'stdout',None) or b'',str(exc).encode())
     raw = result.stdout; sha = hashlib.sha256(raw).hexdigest(); path = raw_dir/(sha+'.json')
-    with tempfile.NamedTemporaryFile(dir=raw_dir,delete=False) as f:
-        f.write(raw); temporary=Path(f.name)
     try:
-        try: os.link(temporary,path)
-        except FileExistsError:
-            if path.read_bytes()!=raw: raise ValueError('Raw response integrity collision')
-    finally: temporary.unlink()
+        with path.open('xb') as out: out.write(raw)
+    except FileExistsError:
+        if path.read_bytes()!=raw: raise ValueError('Raw response integrity collision')
     fetched = dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds')
     error = None; normalized = None
     try:

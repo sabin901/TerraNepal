@@ -157,9 +157,9 @@ def main():
         parser.error('Output paths must differ from input evidence and each other')
     if any(path.exists() for path in outputs):
         parser.error('Output already exists; choose new paths to preserve prior briefs')
-    result = brief(json.loads(args.snapshot.read_text()), epoch(args.at) if args.at else None, args.hours)
+    result = brief(json.loads(args.snapshot.read_text(encoding='utf-8')), epoch(args.at) if args.at else None, args.hours)
     write(args.output, result)
-    args.output.with_suffix('.md').write_text(markdown(result))
+    args.output.with_suffix('.md').write_text(markdown(result), encoding='utf-8')
 
 
 if __name__ == '__main__':

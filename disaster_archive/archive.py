@@ -4,7 +4,8 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime as dt
-import fcntl
+try: import fcntl
+except ImportError: fcntl = None; import msvcrt
 import gzip
 import hashlib
 import html
@@ -44,7 +45,7 @@ def parse_time(value):
 def write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + '.tmp')
-    tmp.write_text(json.dumps(value, ensure_ascii=False, indent=2) + '\n')
+    tmp.write_text(json.dumps(value, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     tmp.replace(path)
 
 class Archive:
@@ -135,7 +136,7 @@ class Archive:
                         if key.lower() in ('content-type', 'etag', 'last-modified', 'date', 'content-length'):
                             kept_headers[key.lower()] = val.strip()
             cursor = self.db.execute('INSERT INTO fetches(run_id,source,url,fetched_at,http_status,sha256,raw_path,byte_count,headers,error) VALUES (?,?,?,?,?,?,?,?,?,?)',
-                (self.run_id, source, url, stamp, status, digest, str(rel), len(raw), canonical(kept_headers), error))
+                (self.run_id, source, url, stamp, status, digest, rel.as_posix(), len(raw), canonical(kept_headers), error))
             fetch_id = cursor.lastrowid
             self.db.commit()
             time.sleep(self.config['request_pause_seconds'])
@@ -442,9 +443,11 @@ class Archive:
                     out.write(canonical(dict(row))+'\n')
             temp.replace(path)
         historical = self.root/'exports/desinventar_aggregates.ndjson.gz'
-        with gzip.open(historical, 'wt', encoding='utf-8') as out:
+        historical_tmp = historical.with_suffix(historical.suffix+'.tmp')
+        with gzip.open(historical_tmp, 'wt', encoding='utf-8') as out:
             for row in self.db.execute("SELECT collection,native_id,payload,latest_fetch_id FROM current_payloads WHERE collection LIKE 'desinventar:%'"):
                 out.write(canonical({'collection':row['collection'],'id':row['native_id'],'data':json.loads(row['payload']),'fetch_id':row['latest_fetch_id']})+'\n')
+        historical_tmp.replace(historical)
         counts = [dict(r) for r in self.db.execute('SELECT collection,count(*) records FROM records GROUP BY collection ORDER BY collection')]
         current_run = self.db.execute('SELECT * FROM runs ORDER BY started_at DESC,rowid DESC LIMIT 1').fetchone()
         run = dict(current_run) if current_run else {}
@@ -472,7 +475,7 @@ class Archive:
                   '- ReliefWeb report ingestion: awaiting a user-owned approved appname; no access bypass.',
                   '- Not a live warning service or a validated prediction model.', '', '## This run\'s issues', '']
         lines += [f"- {i['collection']}: {i['code']} — {i['detail']}" for i in issue_rows] or ['- No collector issues logged. Source completeness still requires review.']
-        (self.root/'exports/status.md').write_text('\n'.join(lines)+'\n')
+        (self.root/'exports/status.md').write_text('\n'.join(lines)+'\n', encoding='utf-8')
         return manifest
 
     def backup(self):
@@ -509,8 +512,9 @@ def main():
     args.root.mkdir(parents=True, exist_ok=True)
     with (args.root/'.collector.lock').open('a') as lock:
         try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
+            if fcntl: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            else: msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+        except (BlockingIOError, OSError):
             print('Another archive operation is running; exiting without overlapping writes.', file=sys.stderr)
             return 3
         archive = Archive(args.root)

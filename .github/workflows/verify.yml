@@ -9,11 +9,19 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.13'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '20'}
       - run: pip install -r requirements.txt pip-audit==2.10.1
+      # Python test suites
       - run: python -m unittest discover -s disaster_lab -p 'test_*.py' -v
       - run: python -m unittest discover -s deploy -p 'test_*.py' -v
       - run: python -m unittest discover -s disaster_archive -p 'test_*.py' -v
+      - run: python -m unittest discover -s public_site -p 'test_*.py' -v
+      # JavaScript / Node tests
+      - run: node public_site/test_logic.cjs
+      # Dependency audit
       - run: pip-audit -r requirements.txt
+      # Docker / deployment smoke tests
       - run: NEPAL_DOMAIN=research.example.org docker compose config --quiet
       - run: docker build -t nepal-disaster-lab:ci .
       - run: LAB_IMAGE=nepal-disaster-lab:ci python disaster_lab/docker_smoke.py

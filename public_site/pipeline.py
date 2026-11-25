@@ -46,7 +46,7 @@ LIMITATIONS = [
 def write(path, value):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
     text=json.dumps(value,ensure_ascii=False,allow_nan=False,separators=(',',':'))+'\n'
-    tmp=path.with_suffix(path.suffix+'.tmp');tmp.write_text(text);tmp.replace(path)
+    tmp=path.with_suffix(path.suffix+'.tmp');tmp.write_text(text,encoding='utf-8');tmp.replace(path)
 
 def require_keys(obj, expected):
     if not isinstance(obj,dict) or set(obj)!=set(expected):raise ValueError('Unexpected public schema keys')
@@ -223,7 +223,7 @@ def build(snapshot,output):
         shutil.copyfile(ROOT/'disaster_lab/static'/name,out/name)
     write(out/'data/snapshot.json',s)
     write(out/'data/situation-brief.json',assessment)
-    (out/'situation-brief.md').write_text(markdown(assessment))
+    (out/'situation-brief.md').write_text(markdown(assessment),encoding='utf-8')
     (out/'.nojekyll').touch()
     print('Built allowlisted Pages artifact:',out)
 

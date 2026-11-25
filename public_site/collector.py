@@ -108,9 +108,11 @@ def collect(output, state_root):
     from archive import Archive
     state_root=Path(state_root);state_root.mkdir(parents=True,exist_ok=True)
     # Local lock also protects manual overlapping refreshes. CI uses workflow concurrency.
-    import fcntl
+    try: import fcntl
+    except ImportError: fcntl=None; import msvcrt
     with (state_root/'.refresh.lock').open('a') as lock:
-        fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        if fcntl: fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        else: msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
         return _collect(output,state_root)
 
 def _collect(output,state_root):

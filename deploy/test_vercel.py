@@ -57,7 +57,7 @@ class VercelTests(unittest.TestCase):
                 self.assertEqual(self.client.get('/data/snapshot.json').status_code,503)
 
     def test_dashboard_and_all_linked_assets(self):
-        for path in ('/', '/index.html', '/app.js', '/logic.js', '/style.css', '/favicon.svg', '/lab-status.html', '/lab-status.css'):
+        for path in ('/', '/index.html', '/app.js', '/logic.js', '/style.css', '/favicon.svg', '/i18n.js', '/terra-map.js', '/lab-status.html', '/lab-status.css'):
             self.assertEqual(self.client.get(path).status_code,200,path)
         self.assertIn('VERCEL PUBLIC RESEARCH',self.client.get('/').text)
         self.assertEqual(self.client.get('/vercel_app.py').status_code,404)
@@ -68,7 +68,7 @@ class VercelTests(unittest.TestCase):
     def test_build_contains_only_reviewed_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             out=Path(tmp)/'public';build(out)
-            self.assertEqual({p.name for p in out.iterdir()}, {'index.html','app.js','style.css','logic.js','favicon.svg','lab-status.html','lab-status.css'})
+            self.assertEqual({p.name for p in out.iterdir()}, {'index.html','app.js','style.css','logic.js','favicon.svg','i18n.js','terra-map.js','lab-status.html','lab-status.css'})
             self.assertIn('Private archive and case editing remain', (out/'index.html').read_text())
             with self.assertRaises(ValueError):build(out)
 

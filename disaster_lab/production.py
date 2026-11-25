@@ -17,6 +17,9 @@ from flask import Flask, Response, request, session, redirect, render_template_s
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 from waitress import serve
+import sys as _sys
+import os as _os
+_sys.path.insert(0, str(_os.path.dirname(__file__)))  # keep bare imports working
 from server import App, STATIC
 from data import ROOT, csv_safe
 from analytics import analyze, quality_audit
@@ -144,6 +147,17 @@ def create_app(root=ROOT,state=None,local=False,hosts=None,origin=None):
             cutoff=q.get('cutoff') or dt.datetime.now(dt.timezone.utc).isoformat()
             return json_response(cases.replay(q['id'],cutoff) if q.get('id') else cases.list_cases(cutoff))
         if name=='case-integrity':return json_response(cases.verify())
+        if name=='notifications':
+            from notifications import recent as notify_recent
+            return json_response(notify_recent(state=state,limit=int(q.get('limit',50))))
+        if name=='station-registry':
+            from station_registry import build as _build_registry
+            ghcnh_path=Path(root)/'disaster_lab/local/ghcnh_normalized.json'
+            if not ghcnh_path.exists():return json_response({'candidates':[],'note':'No GHCNh normalized data found. Run ghcnh.py first.'})
+            import json as _json
+            doc=_json.loads(ghcnh_path.read_text(encoding='utf-8'))
+            reg=_build_registry(doc)
+            return json_response(reg)
         if name=='session':return json_response({'token':csrf(),'authenticated':not local})
         if name=='operations':return json_response({**ops.status(),'read_snapshot':{'loaded_at':cache.loaded_at,'error':cache.last_error}})
         if name=='refresh':return json_response(ops.refresh_status())
@@ -184,7 +198,7 @@ def create_app(root=ROOT,state=None,local=False,hosts=None,origin=None):
     def files(path='index.html'):
         docs={'guide':Path(root)/'disaster_lab/README.md','methods':Path(root)/'disaster_lab/METHODS.md','research':Path(root)/'planning/hazard-data-and-scientific-method.md'}
         if path in docs:return Response(docs[path].read_bytes(),content_type='text/plain; charset=utf-8')
-        allowed={'lab-status.html':'text/html','lab-status.css':'text/css','workspace.html':'text/html','workspace.js':'text/javascript','workspace.css':'text/css','index.html':'text/html','app.js':'text/javascript','forecast.js':'text/javascript','style.css':'text/css','modern.css':'text/css','nepal.geojson':'application/geo+json','favicon.svg':'image/svg+xml'}
+        allowed={'lab-status.html':'text/html','lab-status.css':'text/css','workspace.html':'text/html','workspace.js':'text/javascript','workspace.css':'text/css','index.html':'text/html','app.js':'text/javascript','forecast.js':'text/javascript','style.css':'text/css','modern.css':'text/css','nepal.geojson':'application/geo+json','favicon.svg':'image/svg+xml','i18n.js':'text/javascript','lab-map.js':'text/javascript'}
         if path not in allowed:return json_response({'error':'Not found'},404)
         return Response((STATIC/path).read_bytes(),content_type=allowed[path]+'; charset=utf-8')
     return app

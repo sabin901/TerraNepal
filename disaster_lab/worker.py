@@ -2,7 +2,8 @@
 import argparse
 import contextlib
 import concurrent.futures
-import fcntl
+try: import fcntl
+except ImportError: fcntl=None; import msvcrt
 import json
 import os
 from pathlib import Path
@@ -37,21 +38,32 @@ def execute(ops,name,stop):
                 ops.finish(name,0,'Archive reconciliation already completed at '+row[0])
                 with ops.db() as db:db.execute('UPDATE jobs SET next_at=? WHERE name=?',(timestamp(row[0])+86400,name))
                 return
-        with path.open('w') as out:
-            proc=subprocess.Popen(command(name),stdout=out,stderr=subprocess.STDOUT,cwd=ROOT,start_new_session=True)
+        with path.open('w',encoding='utf-8') as out:
+            popen_kw={'stdout':out,'stderr':subprocess.STDOUT,'cwd':ROOT}
+            if os.name!='nt':popen_kw['start_new_session']=True
+            proc=subprocess.Popen(command(name),**popen_kw)
             deadline=time.monotonic()+TIMEOUTS[name]
             while proc.poll() is None:
                 if stop.wait(1) or time.monotonic()>deadline:
-                    os.killpg(proc.pid,signal.SIGTERM)
+                    if os.name!='nt':os.killpg(proc.pid,signal.SIGTERM)
+                    else:proc.terminate()
                     try:proc.wait(timeout=10)
                     except subprocess.TimeoutExpired:
-                        os.killpg(proc.pid,signal.SIGKILL);proc.wait()
+                        if os.name!='nt':os.killpg(proc.pid,signal.SIGKILL)
+                        else:proc.kill()
+                        proc.wait()
                     raise RuntimeError('Worker stopped' if stop.is_set() else 'Job exceeded its time limit')
             code=proc.returncode
         detail='Log: '+path.name
         if code:detail+='\n'+path.read_text(errors='replace')[-1500:]
         ops.finish(name,code,detail)
         if code==0 and name in ('live','daily'):ops.request(('analytics',))
+        # Notify on job failure (non-blocking; never raises)
+        if code!=0:
+            try:
+                from notifications import notify as _notify
+                _notify('job_failure',f'Job {name!r} exited with code {code}. Log tail: {detail[-400:]}')
+            except Exception:pass
     except Exception as e:
         ops.finish(name,1,str(e))
     finally:
@@ -65,8 +77,10 @@ def main():
     if args.health:
         report=ops.status();print(json.dumps({'worker':report['worker']}));return 0 if report['worker']=='online' else 1
     lock=(state_root()/'.worker.lock').open('a')
-    try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-    except BlockingIOError:
+    try:
+        if fcntl:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        else:msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
+    except (BlockingIOError,OSError):
         print('Another worker owns this state directory',file=sys.stderr);return 3
     os.umask(0o077);stop=threading.Event()
     for sig in (signal.SIGINT,signal.SIGTERM):signal.signal(sig,lambda *_:stop.set())

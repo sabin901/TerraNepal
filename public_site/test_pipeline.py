@@ -105,7 +105,7 @@ class PublicSnapshotTests(unittest.TestCase):
     def test_build_only_allowlisted_files(self):
         with tempfile.TemporaryDirectory() as d:
             p.build(p.SEED,d)
-            files={str(f.relative_to(d)) for f in Path(d).rglob('*') if f.is_file()}
+            files={f.relative_to(d).as_posix() for f in Path(d).rglob('*') if f.is_file()}
             self.assertEqual(files,set(p.ASSETS)|{'lab-status.html','lab-status.css','data/snapshot.json','data/situation-brief.json','situation-brief.md','.nojekyll'})
             with self.assertRaises(ValueError):p.build(p.SEED,d)
     def test_build_rejects_future_health_but_allows_stale_partial_seed(self):

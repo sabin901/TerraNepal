@@ -53,6 +53,7 @@ def headers(response):
 # Explicit allowlist also serves the dashboard when platform static routing is absent.
 PUBLIC_ASSETS = {'index.html':'text/html', 'app.js':'text/javascript',
     'logic.js':'text/javascript', 'style.css':'text/css', 'favicon.svg':'image/svg+xml',
+    'i18n.js':'text/javascript', 'terra-map.js':'text/javascript',
     'lab-status.html':'text/html', 'lab-status.css':'text/css'}
 
 @app.get('/')
@@ -61,7 +62,7 @@ def asset(name='index.html'):
     if name not in PUBLIC_ASSETS:
         return missing(None)
     folder = ROOT/'disaster_lab/static' if name.startswith('lab-status.') else ROOT/'public_site/static'
-    content=(folder/name).read_text()
+    content=(folder/name).read_text(encoding='utf-8')
     if name=='index.html':
         content=content.replace('NEPAL / PUBLIC RESEARCH BETA','NEPAL / VERCEL PUBLIC RESEARCH')
         content=content.replace('<div id="status"', '<p>Public evidence deployment. Private archive and case editing remain in the local lab. <a href="/api/capabilities">Deployment capabilities</a></p><div id="status"')

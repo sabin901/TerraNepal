@@ -7,7 +7,8 @@ import importlib.metadata
 import json
 import math
 from pathlib import Path
-import resource
+try: import resource
+except ImportError: resource=None
 import subprocess
 import tempfile
 import time
@@ -214,7 +215,7 @@ def main():
         if results[-1]['http_status'] in (401,403,429):break
     report={'source':SOURCE,'parser_version':VERSION,'results':results,'requests':len(results),
             'response_bytes':sum(r['response']['bytes'] for r in results),'wall_seconds':time.monotonic()-started,
-            'max_rss_native_units':resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+            'max_rss_native_units':resource.getrusage(resource.RUSAGE_SELF).ru_maxrss if resource else None,
             'rss_note':'macOS bytes; Linux KiB; process peak includes imported decoder',
             'complete_requested_fields':len(results)==len(leads)*len(FIELDS) and all(r['status']=='decoded' for r in results)}
     evidence=retain(a.root/'reports',canonical(report),'.json')

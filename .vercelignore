@@ -1,6 +1,7 @@
 # Deny by default, including local credentials, archive originals and SQLite state.
 **
 !app.py
+!pyproject.toml
 !vercel.json
 !requirements.txt
 !deploy/

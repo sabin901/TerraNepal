@@ -122,7 +122,7 @@ class Handler(BaseHTTPRequestHandler):
                 # Full filtered export; same filtering rules as the UI.
                 rows=[r for r in a.dataset.incidents if (not one('hazard') or r['hazard']==one('hazard')) and
                       (not one('district') or one('district') in r['districts']) and
-                      (not one('year') or r['local_event_date'].startswith(one('year')))]
+                      (not one('year') or (r.get('local_event_date') or '').startswith(one('year')))]
                 out=io.StringIO();cols=['incident_id','local_event_date','hazard','districts','latitude','longitude','reported_deaths','reported_missing','source_verified']
                 writer=csv.DictWriter(out,fieldnames=cols);writer.writeheader()
                 for r in rows:
