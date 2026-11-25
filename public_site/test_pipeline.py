@@ -118,6 +118,22 @@ class PublicSnapshotTests(unittest.TestCase):
             p.build(p.SEED,out)
             self.assertTrue((out/'data/snapshot.json').exists())
 
+    def test_seed_has_no_implausible_levels_or_swapped_coords(self):
+        for r in self.seed['rivers']:
+            if r['level'] is not None:
+                self.assertGreaterEqual(r['level'],p.RIVER_LEVEL_MIN)
+                self.assertLessEqual(r['level'],p.RIVER_LEVEL_MAX)
+            if r['latitude'] is not None and r['longitude'] is not None:
+                self.assertLessEqual(r['latitude'],32.0,r['id'])
+                self.assertGreaterEqual(r['longitude'],78.0,r['id'])
+
+    def test_merge_sanitizes_implausible_river_level_and_swapped_coords(self):
+        corrupt={'id':'999','name':'Test','basin':'Koshi','observed_at':'2026-11-03T18:00:00Z',
+                 'level':100006.28,'latitude':85.68,'longitude':27.52,'conflicting':False,'units':'unconfirmed source units'}
+        merged=p.merge_stations([corrupt],[])[0]
+        self.assertIsNone(merged['level'])
+        self.assertEqual((merged['latitude'],merged['longitude']),(27.52,85.68))
+
     def test_future_station_rows_quarantined_at_shared_boundary(self):
         with closing(sqlite3.connect(':memory:')) as db:
             db.row_factory=sqlite3.Row

@@ -26,7 +26,9 @@ from weather import ForecastStore, PLACES, MODELS, PLAUSIBILITY_LIMITS, normaliz
 SEED = Path(__file__).with_name('snapshot.json')
 PUBLIC_URL = 'https://sabin901.github.io/TerraNepal/data/snapshot.json'
 CLOCK_SKEW_SECONDS = 300
-ASSETS = ('index.html', 'app.js', 'style.css', 'logic.js', 'favicon.svg')
+RIVER_LEVEL_MIN = -50.0
+RIVER_LEVEL_MAX = 9000.0
+ASSETS = ('index.html', 'app.js', 'style.css', 'logic.js', 'favicon.svg', 'i18n.js', 'manifest.json', 'sw.js')
 ROOT_KEYS = {'schema_version','built_at','archive','rivers','rain_stations','weather','updates','limitations'}
 V2_KEYS = ROOT_KEYS | {'earthquakes','discharge','pipeline'}
 RIVER_KEYS = {'id','name','basin','observed_at','level','latitude','longitude','conflicting','units'}
@@ -119,6 +121,22 @@ def validate(s):
     json.dumps(s,allow_nan=False)
     return s
 
+def _normalize_nepal_coords(lat, lon):
+    if number(lat) and number(lon) and 79.5 <= lat <= 88.8 and 25.5 <= lon <= 31.0:
+        return lon, lat
+    return lat, lon
+
+def _sanitize_river_row(row, quarantine=None):
+    lat, lon = _normalize_nepal_coords(row.get('latitude'), row.get('longitude'))
+    row['latitude'], row['longitude'] = lat, lon
+    lvl = row.get('level')
+    if lvl is not None and (not number(lvl) or lvl < RIVER_LEVEL_MIN or lvl > RIVER_LEVEL_MAX):
+        if quarantine is not None:
+            quarantine.append({'source': 'river', 'station_id': str(row['id']),
+                               'observed_at': row['observed_at'], 'reason': 'implausible river level'})
+        row['level'] = None
+    return row
+
 def station_rows(db, at=None, quarantine=None):
     at=time.time() if at is None else at
     groups={}
@@ -133,9 +151,9 @@ def station_rows(db, at=None, quarantine=None):
         t=timestamp(r['observed_at'])
         if r['station_id'] is None or t is None or future_row('river',r,t):continue
         sid=str(r['station_id']);prev=groups.get(sid)
-        row={'id':sid,'name':r['station_name'],'basin':r['basin'],'observed_at':r['observed_at'],
+        row=_sanitize_river_row({'id':sid,'name':r['station_name'],'basin':r['basin'],'observed_at':r['observed_at'],
              'level':r['water_level_source_units'] if number(r['water_level_source_units']) else None,
-             'latitude':r['latitude'],'longitude':r['longitude'],'conflicting':False,'units':'unconfirmed source units'}
+             'latitude':r['latitude'],'longitude':r['longitude'],'conflicting':False,'units':'unconfirmed source units'}, quarantine)
         if prev is None or t>timestamp(prev['observed_at']):groups[sid]=row
         elif t==timestamp(prev['observed_at']) and (prev['conflicting'] or prev['level']!=row['level']):prev.update(level=None,conflicting=True)
     rain={}
@@ -177,12 +195,18 @@ def export_local(output):
     finally:db.close()
 
 def merge_stations(previous, current):
-    merged={s['id']:copy.deepcopy(s) for s in previous}
+    merged={}
+    for s in previous:
+        item=copy.deepcopy(s)
+        if 'level' in item:_sanitize_river_row(item)
+        merged[item['id']]=item
     for s in current:
-        p=merged.get(s['id'])
-        if p is None or timestamp(s['observed_at'])>timestamp(p['observed_at']):merged[s['id']]=s
-        elif timestamp(s['observed_at'])==timestamp(p['observed_at']) and 'level' in s and (p['level']!=s['level'] or p['conflicting'] or s['conflicting']):
-            merged[s['id']].update(level=None,conflicting=True)
+        item=copy.deepcopy(s)
+        if 'level' in item:_sanitize_river_row(item)
+        p=merged.get(item['id'])
+        if p is None or timestamp(item['observed_at'])>timestamp(p['observed_at']):merged[item['id']]=item
+        elif timestamp(item['observed_at'])==timestamp(p['observed_at']) and 'level' in item and (p['level']!=item['level'] or p['conflicting'] or item['conflicting']):
+            merged[item['id']].update(level=None,conflicting=True)
     return sorted(merged.values(),key=lambda s:s['id'])
 
 def previous_snapshot():
