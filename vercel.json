@@ -3,7 +3,7 @@
   "framework": "flask",
   "ignoreCommand": "if [ \"$VERCEL_GIT_COMMIT_REF\" = \"codex/data-snapshots\" ]; then exit 0; else exit 1; fi",
   "buildCommand": "python deploy/build_vercel.py",
-  "functions": {"app.py": {"maxDuration": 30}},
+  "functions": {"app.py": {"maxDuration": 30, "includeFiles": "{deploy/**,public_site/**,disaster_lab/**}"}},
   "headers": [{"source": "/(.*)", "headers": [
     {"key": "X-Content-Type-Options", "value": "nosniff"},
     {"key": "Referrer-Policy", "value": "strict-origin-when-cross-origin"}

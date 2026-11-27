@@ -26,6 +26,7 @@ def run_tests() -> int:
         ("Archive Suite", [sys.executable, "-m", "unittest", "discover", "-s", "disaster_archive", "-p", "test_*.py", "-v"]),
         ("Lab Production Suite", [sys.executable, "-m", "unittest", "discover", "-s", "disaster_lab", "-p", "test_production.py", "-v"]),
         ("Lab Analytics Suite", [sys.executable, "-m", "unittest", "discover", "-s", "disaster_lab", "-p", "test_analytics.py", "-v"]),
+        ("Public Site Python Suite", [sys.executable, "-m", "unittest", "discover", "-s", "public_site", "-p", "test_*.py", "-v"]),
     ]
     failed = []
     for label, cmd in suites:
